@@ -67,6 +67,7 @@ th:first-child,td:first-child{text-align:left}
 td.mono,.mono{font-family:var(--mono)}
 tr.len td{background:var(--bg);font-weight:600}
 .marks tr{cursor:pointer}
+.marks select{padding:1px 4px;font-size:12px;font-family:var(--mono)}
 .marks tr:hover td{background:var(--bg)}
 .x{border:none;background:none;color:var(--muted);padding:0 4px;font-size:15px}
 .x:hover{color:var(--accent)}
@@ -108,7 +109,9 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
     <label>Rang<input id="f_rank" type="number" min="1" max="99"></label>
     <label>Couloir<input id="f_lane" type="number" min="0" max="9" value="4"></label>
     <label>Temps officiel<input id="f_off" placeholder="ex. 52,31 ou 1:02,45" inputmode="decimal"></label>
-    <label>Caler le départ<select id="f_sync"><option value="0">Sur le signal S</option><option value="1">Sur le temps officiel</option></select></label>
+    <label>Réaction officielle<input id="f_offr" placeholder="ex. 0,68" inputmode="decimal"></label>
+    <label>Caler le départ<select id="f_sync"><option value="0">Sur le signal S</option><option value="1">Sur le temps officiel</option><option value="2">Sur la réaction officielle (D)</option></select></label>
+    <label>Repères par longueur (m)<input id="f_plan" placeholder="ex. 5,15,25,35,45,50"></label>
     <label>Images / s<input id="f_fps" type="number" min="1" max="240" value="25"></label>
     <label>Appui « C » =<select id="f_cyc"><option value="0.5">1 bras (½ cycle)</option><option value="1">1 cycle</option></select></label>
   </div>
@@ -176,7 +179,8 @@ const TYPES={
   section:{k:"X",label:"Passage de section",c:"--c-section"}
 };
 const KEYMAP={}; for(const t in TYPES) KEYMAP[TYPES[t].k.toLowerCase()]=t;
-const CFG={25:[5,10,5,5],50:[5,10,10,10,10,5]}; // découpage des sections par longueur (comme les fiches Espadon PC)
+const CFG={25:[5,10,5,5],50:[5,10,10,10,10,5]};
+const PLAN={25:"5,15,20,25",50:"5,15,25,35,45,50"}; // découpage des sections par longueur (comme les fiches Espadon PC)
 const DISTS={50:[50,100,200,400,800,1500],25:[50,100,200,400,800,1500]};
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const fmt=(x,d=2)=>x==null||!isFinite(x)?"—":x.toFixed(d).replace(".",",");
@@ -186,18 +190,25 @@ const fmtT=s=>{if(s==null||!isFinite(s))return"—";const m=Math.floor(s/60),r=s
 let marks=[], sample=true, vid=$("vid"), hasVideo=false, duration=60;
 
 function fillDist(){const b=$("f_bassin").value,cur=+$("f_dist").value||100;$("f_dist").innerHTML=DISTS[b].map(d=>`<option value="${d}" ${d==cur?"selected":""}>${d} m</option>`).join("")}
-function boundaries(){const b=+$("f_bassin").value,D=+$("f_dist").value,out=[];for(let s=0;s<D;s+=b){let acc=s;for(const l of CFG[b]){acc+=l;out.push(acc)}}return out}
-function t0(){if($("f_sync").value=="1"){const off=parseT($("f_off").value),bd=boundaries(),sc=sorted().filter(m=>m.type=="section");if(off&&sc.length>=bd.length)return sc[bd.length-1].t-off}
+function plan(){const b=+$("f_bassin").value;let p=String($("f_plan").value||PLAN[b]).split(/[;,\s]+/).map(x=>+x.replace(",", ".")).filter(x=>x>0&&x<=b);
+  p=[...new Set(p)].sort((a,c)=>a-c);if(p[p.length-1]!==b)p.push(b);return p}
+function boundaries(){const b=+$("f_bassin").value,D=+$("f_dist").value,out=[];for(let s=0;s<D;s+=b)for(const o of plan())out.push(s+o);return out}
+function t0(){if($("f_sync").value=="2"){const r=parseT($("f_offr").value),d=marks.find(m=>m.type=="react");if(r&&d)return d.t-r}
+  if($("f_sync").value=="1"){const off=parseT($("f_off").value),bd=boundaries(),sc=sorted().filter(m=>m.type=="section");if(off&&sc.length>=bd.length)return sc[bd.length-1].t-off}
   const s=marks.find(m=>m.type=="start");return s?s.t:0}
-function syncInfo(){const S=marks.find(m=>m.type=="start"),T=t0();if($("f_sync").value=="1"&&(!S||Math.abs(S.t-T)>1e-6)&&parseT($("f_off").value))return{label:"Recalé sur officiel",diff:S?S.t-T:null};return{label:S?"Signal S":"Non pointé",diff:null}}
+function syncInfo(){const S=marks.find(m=>m.type=="start"),T=t0();if($("f_sync").value=="2"&&parseT($("f_offr").value)&&marks.some(m=>m.type=="react"))return{label:"Recalé sur réaction officielle",diff:S?S.t-T:null};if($("f_sync").value=="1"&&(!S||Math.abs(S.t-T)>1e-6)&&parseT($("f_off").value))return{label:"Recalé sur officiel",diff:S?S.t-T:null};return{label:S?"Signal S":"Non pointé",diff:null}}
 // position (m) d'un instant (s, relatif au départ) par interpolation entre les repères de section
 function posFn(T0){const dmap=sectionDist();const pts=sorted().filter(m=>m.type=="section"&&dmap.get(m)!=null).map(m=>[m.t-T0,dmap.get(m)]);
   return t=>{if(t==null)return null;for(let i=1;i<pts.length;i++){const[t1,d1]=pts[i-1],[t2,d2]=pts[i];if(t>=t1&&t<=t2&&t2>t1)return d1+(d2-d1)*(t-t1)/(t2-t1)}return null}}
 function sorted(){return [...marks].sort((a,b)=>a.t-b.t)}
-function sectionDist(){const bd=boundaries();let i=0;const map=new Map();for(const m of sorted())if(m.type=="section"){map.set(m,bd[i]??null);i++}return map}
-function nextLabel(){const bd=boundaries(),n=marks.filter(m=>m.type=="section").length;if(!marks.some(m=>m.type=="start"))return"Prochain : S départ";return n<bd.length?`Prochain repère X : ${bd[n]} m`:"Course terminée"}
+// chaque repère X garde sa distance (m.d), choisie au pointage et modifiable dans la liste
+function nextDist(before){const bd=boundaries(),map=sectionDist();let last=0;for(const m of sorted())if(m.type=="section"&&(before==null||m.t<=before)){const d=map.get(m);if(d!=null)last=Math.max(last,d)}
+  const used=new Set([...map.values()]);return bd.find(x=>x>last&&!used.has(x))??null}
+function sectionDist(){const bd=boundaries();const map=new Map();let last=0;
+  for(const m of sorted())if(m.type=="section"){let d=m.d;if(d==null){d=bd.find(x=>x>last)??null}map.set(m,d);if(d!=null)last=Math.max(last,d)}return map}
+function nextLabel(){const n=nextDist(hasVideo?vid.currentTime:null);if(!marks.some(m=>m.type=="start"||m.type=="react"))return"Prochain : S départ ou D décollage";return n!=null?`Prochain repère X : ${n} m`:"Course terminée"}
 
-function addMark(type){const t=hasVideo?vid.currentTime:(marks.length?Math.max(...marks.map(m=>m.t))+0.5:0);marks.push({type,t:+t.toFixed(3)});render()}
+function addMark(type){const t=hasVideo?vid.currentTime:(marks.length?Math.max(...marks.map(m=>m.t))+0.5:0);const m={type,t:+t.toFixed(3)};if(type=="section")m.d=nextDist(m.t);marks.push(m);render()}
 function undo(){if(!marks.length)return;let li=0;marks.forEach((m,i)=>{if(i>li)li=i});marks.splice(li,1);render()}
 
 function compute(){
@@ -206,7 +217,7 @@ function compute(){
   const secs=s.filter(m=>m.type=="section").map(m=>({d:dmap.get(m),t:m.t-T0})).filter(x=>x.d!=null);
   const strokes=s.filter(m=>m.type=="stroke").map(m=>m.t-T0), breaths=s.filter(m=>m.type=="breath").map(m=>m.t-T0);
   const g=type=>{const m=s.find(x=>x.type==type);return m?m.t-T0:null};
-  const react=g("react"), entry=g("entry");
+  const reactP=g("react"), offR=parseT($("f_offr").value), react=offR!=null?offR:reactP, entry=g("entry");
   const rows=[];let prevT=0,prevD=0;
   for(const x of secs){
     const dt=x.t-prevT, len=x.d-prevD;
@@ -234,7 +245,7 @@ function compute(){
     lStart=r.t;dStart=r.to}
   // départ / virages / arrivée (comme la fiche Espadon PC)
   const L0=lens[0];
-  const depart=L0?{react,vol:react!=null&&entry!=null?entry-react:null,coulee:L0.coulee,couleeD:L0.couleeD,tDepart:L0.brk!=null?L0.brk:null,t15:tAt(15)}:null;
+  const depart=L0?{react,vol:(reactP??react)!=null&&entry!=null?entry-(reactP??react):null,coulee:L0.coulee,couleeD:L0.couleeD,tDepart:L0.brk!=null?L0.brk:null,t15:tAt(15)}:null;
   const turns=[];lens.forEach((L,i)=>{const nx=lens[i+1];
     if(!L.isLast)turns.push({label:"Virage "+(i+1),approche:L.approche,dMur:L.dLast,coulee:nx?nx.coulee:null,couleeD:nx?nx.couleeD:null,
       total:L.approche!=null&&nx&&nx.coulee!=null?L.approche+nx.coulee:null,t15:L.t15after});
@@ -246,7 +257,7 @@ function compute(){
   const allF=rows.filter(r=>r.freq).map(r=>r.freq);
   const freq=allF.length?allF.reduce((a,b)=>a+b)/allF.length:null;
   const strokePos=new Map(strokes.map(t=>[t,pos(t)]));
-  return {rows,lens,depart,turns,totals,react,vol:react!=null&&entry!=null?entry-react:null,entry,t15:r15?r15.t:null,final,pos,T0,
+  return {rows,lens,depart,turns,totals,react,reactP,offR,vol:(reactP??react)!=null&&entry!=null?entry-(reactP??react):null,entry,t15:r15?r15.t:null,final,pos,T0,
     off:parseT($("f_off").value),sync:syncInfo(),freq,tc:freq?60/freq:null,remaining:bd.length-secs.length};
 }
 
@@ -267,8 +278,8 @@ function render(){
   // marks table
   const T0=t0(),dmap=sectionDist();
   const posNow=posFn(T0);
-  $("markBody").innerHTML=sorted().map(m=>{const i=marks.indexOf(m);const d=dmap.get(m);
-    return `<tr data-i="${i}"><td><span class="dot" style="display:inline-block;background:var(${TYPES[m.type].c});margin-right:6px"></span>${TYPES[m.type].label}</td><td class="mono">${fmtT(m.t-T0)}</td><td class="mono">${m.type=="section"?(d!=null?d+" m":"en trop"):(()=>{const q=posNow(m.t-T0);return q!=null?"~"+fmt(q,1)+" m":""})()}</td><td><button class="x" data-del="${i}" aria-label="Supprimer">×</button></td></tr>`}).join("")||`<tr><td colspan="4" class="note">Aucun pointage. Charge une vidéo puis appuie sur S au signal de départ.</td></tr>`;
+  $("markBody").innerHTML=sorted().reverse().map(m=>{const i=marks.indexOf(m);const d=dmap.get(m);
+    return `<tr data-i="${i}"><td><span class="dot" style="display:inline-block;background:var(${TYPES[m.type].c});margin-right:6px"></span>${TYPES[m.type].label}</td><td class="mono">${fmtT(m.t-T0)}</td><td class="mono">${m.type=="section"?`<select data-sd="${i}" aria-label="Distance du repère">${[...new Set([...boundaries(),...(d!=null?[d]:[])])].sort((a,b)=>a-b).map(x=>`<option value="${x}" ${x==d?"selected":""}>${x} m</option>`).join("")}<option value="" ${d==null?"selected":""}>?</option></select>`:(()=>{const q=posNow(m.t-T0);return q!=null?"~"+fmt(q,1)+" m":""})()}</td><td><button class="x" data-del="${i}" aria-label="Supprimer">×</button></td></tr>`}).join("")||`<tr><td colspan="4" class="note">Aucun pointage. Charge une vidéo puis appuie sur S au signal de départ.</td></tr>`;
   $("markCount").textContent=`${marks.length} pointages`;
   $("hudNext").textContent=nextLabel();
   // strip
@@ -278,7 +289,7 @@ function render(){
   updateTime();
   // results
   const r=compute();
-  const k=[...(r.off!=null?[["Temps officiel",fmtT(r.off)+" s"],["Écart pointage",r.final!=null?(r.final-r.off>=0?"+":"")+fmt(r.final-r.off)+" s":"—"]]:[]),["Temps final pointé",fmtT(r.final)+(r.final!=null?" s":"")],["Départ",r.sync.label+(r.sync.diff!=null?` (${r.sync.diff>=0?"+":""}${fmt(r.sync.diff)} s)`:"")],["Réaction",r.react!=null?fmt(r.react)+" s":"—"],["Vol",r.vol!=null?fmt(r.vol)+" s":"—"],["Temps aux 15 m",r.t15!=null?fmt(r.t15)+" s":"—"],["Fréquence moy.",r.freq?fmt(r.freq,1)+" c/min":"—"],["Tps moyen cycle",r.tc?fmt(r.tc)+" s":"—"],["Longueurs",r.lens.length+" / "+(+$("f_dist").value/ +$("f_bassin").value)]];
+  const k=[...(r.off!=null?[["Temps officiel",fmtT(r.off)+" s"],["Écart pointage",r.final!=null?(r.final-r.off>=0?"+":"")+fmt(r.final-r.off)+" s":"—"]]:[]),["Temps final pointé",fmtT(r.final)+(r.final!=null?" s":"")],["Départ",r.sync.label+(r.sync.diff!=null?` (${r.sync.diff>=0?"+":""}${fmt(r.sync.diff)} s)`:"")],["Réaction"+(r.offR!=null?" officielle":""),r.react!=null?fmt(r.react)+" s"+(r.offR!=null&&r.reactP!=null&&$("f_sync").value!="2"?` (pointée ${fmt(r.reactP)})`:""):"—"],["Vol",r.vol!=null?fmt(r.vol)+" s":"—"],["Temps aux 15 m",r.t15!=null?fmt(r.t15)+" s":"—"],["Fréquence moy.",r.freq?fmt(r.freq,1)+" c/min":"—"],["Tps moyen cycle",r.tc?fmt(r.tc)+" s":"—"],["Longueurs",r.lens.length+" / "+(+$("f_dist").value/ +$("f_bassin").value)]];
   $("kpis").innerHTML=k.map(([a,b])=>`<div class="kpi"><b>${b}</b><span>${a}</span></div>`).join("");
   const mt=mainTable(r);
   $("resWrap").innerHTML=mt.rows.length?htmlTable(mt.head,mt.rows,mt.lap):`<p class="note">Les résultats apparaissent dès le premier passage de section.</p>`;
@@ -319,7 +330,8 @@ const toggle=()=>{if(hasVideo)vid.paused?vid.play():vid.pause()};
 $("bPlay").onclick=toggle;$("bBack").onclick=()=>step(-1);$("bFwd").onclick=()=>step(1);$("bBack10").onclick=()=>step(-10);$("bFwd10").onclick=()=>step(10);
 $("rate").onchange=e=>vid.playbackRate=+e.target.value;
 $("strip").onclick=e=>{if(!hasVideo)return;const r=e.currentTarget.getBoundingClientRect();vid.currentTime=(e.clientX-r.left)/r.width*duration};
-$("markBody").onclick=e=>{const d=e.target.dataset.del;if(d!=null){marks.splice(+d,1);render();return}const tr=e.target.closest("tr[data-i]");if(tr&&hasVideo){vid.pause();vid.currentTime=marks[+tr.dataset.i].t}};
+$("markBody").onchange=e=>{const i=e.target.dataset.sd;if(i!=null){marks[+i].d=e.target.value===""?null:+e.target.value;e.target.blur();render()}};
+$("markBody").onclick=e=>{if(e.target.tagName=="SELECT")return;const d=e.target.dataset.del;if(d!=null){marks.splice(+d,1);render();return}const tr=e.target.closest("tr[data-i]");if(tr&&hasVideo){vid.pause();vid.currentTime=marks[+tr.dataset.i].t}};
 
 $("keys").innerHTML=Object.entries(TYPES).map(([t,o])=>`<button class="key" data-t="${t}"><kbd>${o.k}</kbd><span class="dot" style="background:var(${o.c})"></span>${o.label}</button>`).join("")+
  `<button class="key" data-t="undo"><kbd>Z</kbd>Annuler le dernier</button><div class="key"><kbd>␣</kbd>Lecture / pause</div><div class="key"><kbd>← →</kbd>Image par image (Maj ×10)</div>`;
@@ -333,22 +345,22 @@ document.addEventListener("keydown",e=>{
   else if(k=="z"||k=="backspace"){e.preventDefault();undo()}
   else if(KEYMAP[k]&&!e.metaKey&&!e.ctrlKey){e.preventDefault();addMark(KEYMAP[k])}
 });
-$("f_off").addEventListener("input",render);$("f_style").addEventListener("change",()=>{const v=$("f_style").value;$("f_cyc").value=(v=="Nage libre"||v=="Dos")?"0.5":"1";render()});$("f_sync").addEventListener("change",render);
-["f_bassin","f_dist","f_cyc","f_fps"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin")fillDist();render()}));
+$("f_off").addEventListener("input",render);$("f_style").addEventListener("change",()=>{const v=$("f_style").value;$("f_cyc").value=(v=="Nage libre"||v=="Dos")?"0.5":"1";render()});$("f_sync").addEventListener("change",render);$("f_offr").addEventListener("input",()=>{if(parseT($("f_offr").value)&&$("f_sync").value=="0")$("f_sync").value="2";render()});
+["f_bassin","f_dist","f_cyc","f_fps","f_plan"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin"){fillDist();$("f_plan").value=PLAN[$("f_bassin").value]}render()}));
 window.addEventListener("resize",()=>drawChart(compute().rows));
 
 // save / load
 const LS="espadon-web-analyses";
 const getSaved=()=>{try{return JSON.parse(localStorage.getItem(LS))||[]}catch{return[]}};
 const setSaved=a=>{try{localStorage.setItem(LS,JSON.stringify(a));return true}catch{return false}};
-const meta=()=>({nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,rang:$("f_rank").value,officiel:$("f_off").value,sync:$("f_sync").value,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
-function applyMeta(m){$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_cyc").value=m.cycle||1}
+const meta=()=>({nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,rang:$("f_rank").value,officiel:$("f_off").value,sync:$("f_sync").value,reactOff:$("f_offr").value,plan:$("f_plan").value,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
+function applyMeta(m){$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_offr").value=m.reactOff||"";$("f_plan").value=m.plan||PLAN[m.bassin||50];$("f_cyc").value=m.cycle||1}
 function renderSaved(){const a=getSaved();$("saved").innerHTML=a.length?a.map((x,i)=>`<div class="it"><div><b>${x.meta.nageur||"Sans nom"}</b> · ${x.meta.distance} m ${x.meta.nage} · ${x.meta.tour} · <span class="note">${x.meta.competition} ${x.meta.date}</span></div><button data-load="${i}">Ouvrir</button><button class="x" data-rm="${i}" aria-label="Supprimer">×</button></div>`).join(""):`<p class="note">Rien pour l'instant. Les analyses restent dans ce navigateur. Utilise « Copier en JSON » pour les sauvegarder ailleurs.</p>`}
 $("saved").onclick=e=>{const a=getSaved();if(e.target.dataset.load!=null){const x=a[+e.target.dataset.load];applyMeta(x.meta);marks=x.marks;sample=false;$("sampleBadge").hidden=true;render()}
   if(e.target.dataset.rm!=null){if(e.target.dataset.confirm){a.splice(+e.target.dataset.rm,1);setSaved(a);renderSaved()}else{e.target.dataset.confirm=1;e.target.textContent="Confirmer ?";e.target.style.fontSize="12px"}}};
 $("btnSave").onclick=()=>{const a=getSaved(),m=meta();const i=a.findIndex(x=>x.meta.nageur==m.nageur&&x.meta.distance==m.distance&&x.meta.tour==m.tour&&x.meta.competition==m.competition);
   const rec={meta:m,marks,saved:new Date().toISOString()};i>=0?a[i]=rec:a.unshift(rec);const ok=setSaved(a);renderSaved();$("btnSave").textContent=ok?"Enregistré":"Stockage indisponible";setTimeout(()=>$("btnSave").textContent="Enregistrer",1500)};
-$("btnNew").onclick=()=>{marks=[];sample=false;$("sampleBadge").hidden=true;$("f_nageur").value="";$("f_off").value="";render()};
+$("btnNew").onclick=()=>{marks=[];sample=false;$("sampleBadge").hidden=true;$("f_nageur").value="";$("f_off").value="";$("f_offr").value="";render()};
 $("imp").onchange=async e=>{try{const d=JSON.parse(await e.target.files[0].text());const list=Array.isArray(d)?d:[d];const a=getSaved();list.forEach(x=>x.meta&&x.marks&&a.unshift(x));setSaved(a);renderSaved()}catch{$("imp").value=""}};
 
 function copy(txt,btn){const o=btn.textContent;const done=ok=>{btn.textContent=ok?"Copié":"Sélectionne le texte ci-dessous";setTimeout(()=>btn.textContent=o,1600)};
@@ -426,7 +438,7 @@ function loadSample(){
   addStrokes(5.55,24.2,0.51);addStrokes(29.05,51,0.535);
   $("f_date").value=new Date().toISOString().slice(0,10);
 }
-fillDist();$("f_dist").value=100;loadSample();renderSaved();render();
+fillDist();$("f_dist").value=100;$("f_plan").value=PLAN[$("f_bassin").value];loadSample();renderSaved();render();
 </script>
 
 </body></html>
