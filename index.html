@@ -1,0 +1,385 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Espadon Web</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#EEF4F6; --panel:#FFFFFF; --ink:#0E2A3B; --muted:#557082; --line:#CFDDE3;
+  --accent:#D6453D; --accent-ink:#FFFFFF; --water:#1F6F95; --lane:#F2C230;
+  --c-start:#D6453D; --c-react:#8A4FBF; --c-entry:#1F6F95; --c-break:#2E9C6A; --c-stroke:#0E2A3B; --c-breath:#E08A1E; --c-section:#C9A21B;
+  --video:#07141C;
+  --display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;--bg:#0A1A24;--panel:#11283A;--ink:#E4EEF2;--muted:#8FA9B8;--line:#1F3D52;
+  --accent:#EF6A5F;--water:#5DB3D9;--c-start:#EF6A5F;--c-react:#B58AE0;--c-entry:#5DB3D9;--c-break:#4CC48D;--c-stroke:#E4EEF2;--c-breath:#F0A546;--c-section:#F2C230;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;--bg:#0A1A24;--panel:#11283A;--ink:#E4EEF2;--muted:#8FA9B8;--line:#1F3D52;
+  --accent:#EF6A5F;--water:#5DB3D9;--c-start:#EF6A5F;--c-react:#B58AE0;--c-entry:#5DB3D9;--c-break:#4CC48D;--c-stroke:#E4EEF2;--c-breath:#F0A546;--c-section:#F2C230;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;padding-inline:16px;padding-block:14px 40px}
+.wrap{max-width:1400px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 22px;border-bottom:3px solid var(--ink);padding-bottom:10px;position:relative}
+header.top::after{content:"";position:absolute;left:0;right:0;bottom:-9px;height:4px;background:repeating-linear-gradient(90deg,var(--accent) 0 14px,#fff 14px 20px,var(--water) 20px 34px,#fff 34px 40px);opacity:.9}
+h1{font-family:var(--display);font-weight:700;font-size:40px;letter-spacing:.5px;margin:0;line-height:1;text-transform:uppercase}
+h1 span{color:var(--accent)}
+.sub{color:var(--muted);margin:0 0 3px}
+.grow{flex:1}
+h2{font-family:var(--display);font-weight:700;text-transform:uppercase;letter-spacing:.8px;font-size:19px;margin:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+label{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);display:flex;flex-direction:column;gap:3px;font-weight:600}
+input,select{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;min-width:0;text-transform:none;letter-spacing:0;font-weight:400}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+button{font:inherit;font-weight:600;font-size:13px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:4px;padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--ink)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--water);outline-offset:1px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.stage{position:relative;background:var(--video);border-radius:4px;aspect-ratio:16/9;max-width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.stage video{width:100%;height:100%;object-fit:contain;display:block}
+.drop{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#C9DCE5;text-align:center;padding:20px;border:2px dashed #2C4A5C;border-radius:4px}
+.drop strong{font-family:var(--display);font-size:24px;text-transform:uppercase;letter-spacing:1px;color:#fff}
+.drop.over{border-color:var(--lane);background:#0F2533}
+.hud{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.chip{font-family:var(--mono);font-size:12px;background:rgba(7,20,28,.78);color:#fff;padding:3px 7px;border-radius:3px}
+.chip.next{background:var(--lane);color:#0E2A3B;font-weight:600}
+.tc{font-family:var(--mono);font-size:22px;font-variant-numeric:tabular-nums;font-weight:500}
+.tc small{font-size:13px;color:var(--muted)}
+.strip{position:relative;height:46px;background:var(--bg);border:1px solid var(--line);border-radius:4px;cursor:pointer;overflow:hidden}
+.strip .tick{position:absolute;width:2px;border-radius:1px}
+.strip .cur{position:absolute;top:0;bottom:0;width:2px;background:var(--accent)}
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.key{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:5px 7px;border-radius:4px;background:var(--bg);border:1px solid transparent;cursor:pointer;text-align:left;font-weight:500}
+.key:hover{border-color:var(--line)}
+kbd{font-family:var(--mono);font-size:12px;min-width:26px;text-align:center;padding:2px 5px;border-radius:3px;background:var(--panel);border:1px solid var(--line);border-bottom-width:2px;color:var(--ink)}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.marks{max-height:330px;overflow:auto;border:1px solid var(--line);border-radius:4px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--panel)}
+th:first-child,td:first-child{text-align:left}
+td.mono,.mono{font-family:var(--mono)}
+tr.len td{background:var(--bg);font-weight:600}
+.marks tr{cursor:pointer}
+.marks tr:hover td{background:var(--bg)}
+.x{border:none;background:none;color:var(--muted);padding:0 4px;font-size:15px}
+.x:hover{color:var(--accent)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.kpi{border-left:3px solid var(--water);padding:4px 10px}
+.kpi b{display:block;font-family:var(--mono);font-size:20px;font-weight:500}
+.kpi span{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.scroll{overflow-x:auto}
+.note{color:var(--muted);font-size:12.5px;margin:0}
+.badge{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;padding:2px 7px;border-radius:10px;background:var(--lane);color:#0E2A3B}
+textarea{width:100%;min-height:120px;font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px}
+.saved{display:flex;flex-direction:column;gap:6px}
+.saved .it{display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:4px}
+.saved .it div{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div><h1>Espadon <span>Web</span></h1><p class="sub">Analyse vidéo de course · pointage au clavier, image par image</p></div>
+  <div class="grow"></div>
+  <div class="row">
+    <span class="badge" id="sampleBadge">Exemple chargé</span>
+    <button id="btnNew">Nouvelle analyse</button>
+    <button class="primary" id="btnSave">Enregistrer</button>
+  </div>
+</header>
+
+<section class="panel">
+  <div class="fields">
+    <label>Nageur<input id="f_nageur" value="Exemple Nageur"></label>
+    <label>Compétition<input id="f_compet" value="Meeting exemple"></label>
+    <label>Date<input id="f_date" type="date"></label>
+    <label>Bassin<select id="f_bassin"><option value="50">50 m</option><option value="25">25 m</option></select></label>
+    <label>Distance<select id="f_dist"></select></label>
+    <label>Nage<select id="f_style"><option>Nage libre</option><option>Papillon</option><option>Dos</option><option>Brasse</option><option>4 nages</option></select></label>
+    <label>Tour<select id="f_round"><option>Séries</option><option>Demi-finale</option><option>Finale</option><option>Finale B</option><option>Barrage</option><option>Contre-la-montre</option></select></label>
+    <label>Couloir<input id="f_lane" type="number" min="0" max="9" value="4"></label>
+    <label>Images / s<input id="f_fps" type="number" min="1" max="240" value="25"></label>
+    <label>Appui « C » =<select id="f_cyc"><option value="1">1 cycle</option><option value="0.5">1 bras (½ cycle)</option></select></label>
+  </div>
+</section>
+
+<div class="grid">
+  <section class="panel">
+    <div class="stage" id="stage">
+      <video id="vid" playsinline hidden></video>
+      <div class="drop" id="drop">
+        <strong>Dépose la vidéo de la course</strong>
+        <span>MP4, MOV ou WebM. La vidéo reste sur ton ordinateur.</span>
+        <label for="file" style="cursor:pointer"><span class="chip next" style="pointer-events:auto">Choisir un fichier</span></label>
+        <input id="file" type="file" accept="video/*" hidden>
+      </div>
+      <div class="hud"><span class="chip" id="hudT">—</span><span class="chip next" id="hudNext">—</span></div>
+    </div>
+    <div class="row">
+      <div class="tc" id="tc">0,00 s <small>depuis le départ</small></div>
+      <div class="grow"></div>
+      <button id="bBack10" title="Maj + ←">⏮ 10 img</button>
+      <button id="bBack" title="←">◀ 1 img</button>
+      <button id="bPlay" class="primary" title="Espace">Lecture</button>
+      <button id="bFwd" title="→">1 img ▶</button>
+      <button id="bFwd10" title="Maj + →">10 img ⏭</button>
+      <select id="rate" aria-label="Vitesse de lecture"><option value="0.1">×0,1</option><option value="0.25">×0,25</option><option value="0.5">×0,5</option><option value="1" selected>×1</option></select>
+    </div>
+    <div class="strip" id="strip" title="Clique pour te déplacer"></div>
+    <div class="keys" id="keys"></div>
+    <p class="note">Les sections sont affectées dans l'ordre : chaque appui sur <kbd>X</kbd> valide le prochain repère affiché en jaune. Le dernier repère de chaque longueur donne le temps de passage. <kbd>Z</kbd> annule le dernier pointage.</p>
+  </section>
+
+  <section class="panel">
+    <div class="row"><h2>Pointages</h2><div class="grow"></div><span class="note" id="markCount"></span></div>
+    <div class="marks"><table><thead><tr><th>Évènement</th><th>Temps course</th><th>Repère</th><th></th></tr></thead><tbody id="markBody"></tbody></table></div>
+    <h2>Analyses enregistrées</h2>
+    <div class="saved" id="saved"></div>
+    <div class="row"><label for="imp" style="cursor:pointer"><span class="key" style="display:inline-flex">Importer un fichier JSON</span></label><input id="imp" type="file" accept=".json,application/json" hidden></div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="row"><h2>Résultats</h2><div class="grow"></div><button class="primary" id="btnPdf">Rapport PDF</button><button id="cpCsv">Copier en CSV</button><button id="cpJson">Copier en JSON</button></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="scroll"><svg id="chart" width="100%" height="190" role="img" aria-label="Vitesse par section"></svg></div>
+  <div class="scroll"><table><thead><tr><th>Section</th><th>Temps cumulé</th><th>Temps section</th><th>Vitesse m/s</th><th>Cycles</th><th>Fréquence c/min</th><th>Amplitude m/c</th><th>Respirations</th></tr></thead><tbody id="resBody"></tbody></table></div>
+  <textarea id="out" hidden readonly aria-label="Export"></textarea>
+</section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const TYPES={
+  start:{k:"S",label:"Signal de départ",c:"--c-start"},
+  react:{k:"D",label:"Décollage des pieds",c:"--c-react"},
+  entry:{k:"E",label:"Entrée dans l'eau",c:"--c-entry"},
+  brk:{k:"F",label:"Fin de coulée",c:"--c-break"},
+  stroke:{k:"C",label:"Coup de bras",c:"--c-stroke"},
+  breath:{k:"W",label:"Respiration",c:"--c-breath"},
+  section:{k:"X",label:"Passage de section",c:"--c-section"}
+};
+const KEYMAP={}; for(const t in TYPES) KEYMAP[TYPES[t].k.toLowerCase()]=t;
+const CFG={25:[5,5,5,5,5],50:[5,10,10,10,10,5]}; // découpage issu d'espadon.json
+const DISTS={50:[50,100,200,400,800,1500],25:[50,100,200,400,800,1500]};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt=(x,d=2)=>x==null||!isFinite(x)?"—":x.toFixed(d).replace(".",",");
+const fmtT=s=>{if(s==null||!isFinite(s))return"—";const m=Math.floor(s/60),r=s-m*60;return m?`${m}:${r.toFixed(2).padStart(5,"0").replace(".",",")}`:r.toFixed(2).replace(".",",")};
+
+let marks=[], sample=true, vid=$("vid"), hasVideo=false, duration=60;
+
+function fillDist(){const b=$("f_bassin").value,cur=+$("f_dist").value||100;$("f_dist").innerHTML=DISTS[b].map(d=>`<option value="${d}" ${d==cur?"selected":""}>${d} m</option>`).join("")}
+function boundaries(){const b=+$("f_bassin").value,D=+$("f_dist").value,out=[];for(let s=0;s<D;s+=b){let acc=s;for(const l of CFG[b]){acc+=l;out.push(acc)}}return out}
+function t0(){const s=marks.find(m=>m.type=="start");return s?s.t:0}
+function sorted(){return [...marks].sort((a,b)=>a.t-b.t)}
+function sectionDist(){const bd=boundaries();let i=0;const map=new Map();for(const m of sorted())if(m.type=="section"){map.set(m,bd[i]??null);i++}return map}
+function nextLabel(){const bd=boundaries(),n=marks.filter(m=>m.type=="section").length;if(!marks.some(m=>m.type=="start"))return"Prochain : S départ";return n<bd.length?`Prochain repère X : ${bd[n]} m`:"Course terminée"}
+
+function addMark(type){const t=hasVideo?vid.currentTime:(marks.length?Math.max(...marks.map(m=>m.t))+0.5:0);marks.push({type,t:+t.toFixed(3)});render()}
+function undo(){if(!marks.length)return;let li=0;marks.forEach((m,i)=>{if(i>li)li=i});marks.splice(li,1);render()}
+
+function compute(){
+  const T0=t0(), s=sorted(), dmap=sectionDist(), bd=boundaries(), pool=+$("f_bassin").value;
+  const cyc=+$("f_cyc").value;
+  const secs=s.filter(m=>m.type=="section").map(m=>({d:dmap.get(m),t:m.t-T0})).filter(x=>x.d!=null);
+  const strokes=s.filter(m=>m.type=="stroke").map(m=>m.t-T0), breaths=s.filter(m=>m.type=="breath").map(m=>m.t-T0);
+  const g=type=>{const m=s.find(x=>x.type==type);return m?m.t-T0:null};
+  const react=g("react"), entry=g("entry");
+  const rows=[];let prevT=0,prevD=0;
+  for(const x of secs){
+    const dt=x.t-prevT, len=x.d-prevD;
+    const inS=strokes.filter(t=>t>prevT&&t<=x.t);
+    const n=inS.length*cyc;
+    let freq=null; if(inS.length>=2) freq=60*(inS.length-1)*cyc/(inS[inS.length-1]-inS[0]);
+    const v=len/dt;
+    rows.push({from:prevD,to:x.d,t:x.t,dt,v,n,freq,amp:freq?v*60/freq:null,br:breaths.filter(t=>t>prevT&&t<=x.t).length,wall:x.d%pool==0});
+    prevT=x.t;prevD=x.d;
+  }
+  // longueurs
+  const lens=[];const brks=s.filter(m=>m.type=="brk").map(m=>m.t-T0);
+  let lStart=0;
+  for(const r of rows.filter(r=>r.wall)){const idx=lens.length;const b=brks.find(t=>t>lStart&&t<r.t);
+    const st=strokes.filter(t=>t>lStart&&t<=r.t);
+    lens.push({n:idx+1,split:r.t,lap:r.t-lStart,coulee:b!=null?b-lStart:null,cycles:st.length*cyc,br:breaths.filter(t=>t>lStart&&t<=r.t).length});lStart=r.t}
+  const r15=rows.find(r=>r.to==15);
+  const final=rows.length&&rows[rows.length-1].to==+$("f_dist").value?rows[rows.length-1].t:null;
+  const allF=rows.filter(r=>r.freq).map(r=>r.freq);
+  return {rows,lens,react,vol:react!=null&&entry!=null?entry-react:null,entry,t15:r15?r15.t:null,final,
+    freq:allF.length?allF.reduce((a,b)=>a+b)/allF.length:null,remaining:bd.length-secs.length};
+}
+
+function render(){
+  // marks table
+  const T0=t0(),dmap=sectionDist();
+  $("markBody").innerHTML=sorted().map(m=>{const i=marks.indexOf(m);const d=dmap.get(m);
+    return `<tr data-i="${i}"><td><span class="dot" style="display:inline-block;background:var(${TYPES[m.type].c});margin-right:6px"></span>${TYPES[m.type].label}</td><td class="mono">${fmtT(m.t-T0)}</td><td class="mono">${m.type=="section"?(d!=null?d+" m":"en trop"):""}</td><td><button class="x" data-del="${i}" aria-label="Supprimer">×</button></td></tr>`}).join("")||`<tr><td colspan="4" class="note">Aucun pointage. Charge une vidéo puis appuie sur S au signal de départ.</td></tr>`;
+  $("markCount").textContent=`${marks.length} pointages`;
+  $("hudNext").textContent=nextLabel();
+  // strip
+  const max=hasVideo?(vid.duration||duration):Math.max(10,...marks.map(m=>m.t))+2; duration=max;
+  const rowsY={section:[2,42],start:[2,42],react:[4,18],entry:[4,18],brk:[4,18],stroke:[22,20],breath:[24,16]};
+  $("strip").innerHTML=marks.map(m=>{const [y,h]=rowsY[m.type];return `<span class="tick" style="left:${m.t/max*100}%;top:${y}px;height:${h}px;background:var(${TYPES[m.type].c})"></span>`}).join("")+`<span class="cur" id="cur"></span>`;
+  updateTime();
+  // results
+  const r=compute();
+  const k=[["Temps final",fmtT(r.final)+(r.final!=null?" s":"")],["Réaction",r.react!=null?fmt(r.react)+" s":"—"],["Vol",r.vol!=null?fmt(r.vol)+" s":"—"],["Temps aux 15 m",r.t15!=null?fmt(r.t15)+" s":"—"],["Fréquence moy.",r.freq?fmt(r.freq,1)+" c/min":"—"],["Longueurs",r.lens.length+" / "+(+$("f_dist").value/ +$("f_bassin").value)]];
+  $("kpis").innerHTML=k.map(([a,b])=>`<div class="kpi"><b>${b}</b><span>${a}</span></div>`).join("");
+  let html="",li=0;
+  for(const row of r.rows){
+    html+=`<tr><td>${row.from}–${row.to} m</td><td class="mono">${fmtT(row.t)}</td><td class="mono">${fmt(row.dt)}</td><td class="mono">${fmt(row.v)}</td><td class="mono">${row.n||"—"}</td><td class="mono">${fmt(row.freq,1)}</td><td class="mono">${fmt(row.amp)}</td><td class="mono">${row.br||"—"}</td></tr>`;
+    if(row.wall){const L=r.lens[li++];html+=`<tr class="len"><td>Longueur ${L.n}</td><td class="mono">${fmtT(L.split)}</td><td class="mono">${fmt(L.lap)}</td><td colspan="2">Coulée ${L.coulee!=null?fmt(L.coulee)+" s":"—"}</td><td class="mono">${L.cycles} cycles</td><td></td><td class="mono">${L.br}</td></tr>`}
+  }
+  $("resBody").innerHTML=html||`<tr><td colspan="8" class="note">Les résultats apparaissent dès le premier passage de section.</td></tr>`;
+  drawChart(r.rows);
+}
+
+function drawChart(rows){
+  const svg=$("chart"),W=Math.max(svg.clientWidth,320),H=190,pl=42,pr=10,pt=12,pb=28;
+  if(!rows.length){svg.innerHTML=`<text x="${pl}" y="100">Vitesse par section (m/s)</text>`;return}
+  const vmax=Math.ceil(Math.max(...rows.map(r=>r.v))*2)/2, vmin=Math.max(0,Math.floor(Math.min(...rows.map(r=>r.v))*2)/2-0.5);
+  const y=v=>pt+(H-pt-pb)*(1-(v-vmin)/(vmax-vmin)), bw=(W-pl-pr)/rows.length;
+  let s="";for(let v=vmin;v<=vmax+1e-6;v+=0.5)s+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="${css("--line")}"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${fmt(v,1)}</text>`;
+  rows.forEach((r,i)=>{const x=pl+i*bw+2,h=H-pb-y(r.v);
+    s+=`<rect x="${x}" y="${y(r.v)}" width="${Math.max(bw-4,2)}" height="${h}" rx="2" fill="${css(r.from%(+$("f_bassin").value)==0?"--c-break":"--water")}" opacity=".85"><title>${r.from}–${r.to} m : ${fmt(r.v)} m/s</title></rect>`;
+    if(rows.length<=24||i%2==0)s+=`<text x="${x+bw/2-2}" y="${H-10}" text-anchor="middle">${r.to}</text>`});
+  s+=`<text x="${pl}" y="${H-0}">m</text>`;
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.innerHTML=s;
+}
+
+function updateTime(){const t=hasVideo?vid.currentTime:0;const rel=t-t0();
+  $("tc").innerHTML=`${marks.some(m=>m.type=="start")?fmtT(rel):fmtT(t)} s <small>${marks.some(m=>m.type=="start")?"depuis le départ":"temps vidéo"}</small>`;
+  $("hudT").textContent=`vidéo ${fmt(t,3)} s · img ${Math.round(t*(+$("f_fps").value))}`;
+  const c=$("cur");if(c)c.style.left=(t/duration*100)+"%"}
+
+// video
+function loadFile(f){if(!f||!f.type.startsWith("video"))return;vid.src=URL.createObjectURL(f);vid.hidden=false;$("drop").hidden=true;hasVideo=true;
+  if(sample){marks=[];sample=false;$("sampleBadge").hidden=true}render()}
+$("file").onchange=e=>loadFile(e.target.files[0]);
+const st=$("stage");st.addEventListener("dragover",e=>{e.preventDefault();$("drop").classList.add("over")});
+st.addEventListener("dragleave",()=>$("drop").classList.remove("over"));
+st.addEventListener("drop",e=>{e.preventDefault();$("drop").classList.remove("over");loadFile(e.dataTransfer.files[0])});
+vid.addEventListener("timeupdate",updateTime);vid.addEventListener("seeked",updateTime);vid.addEventListener("loadedmetadata",render);
+vid.addEventListener("play",()=>$("bPlay").textContent="Pause");vid.addEventListener("pause",()=>$("bPlay").textContent="Lecture");
+const step=n=>{if(!hasVideo)return;vid.pause();vid.currentTime=Math.max(0,vid.currentTime+n/(+$("f_fps").value))};
+const toggle=()=>{if(hasVideo)vid.paused?vid.play():vid.pause()};
+$("bPlay").onclick=toggle;$("bBack").onclick=()=>step(-1);$("bFwd").onclick=()=>step(1);$("bBack10").onclick=()=>step(-10);$("bFwd10").onclick=()=>step(10);
+$("rate").onchange=e=>vid.playbackRate=+e.target.value;
+$("strip").onclick=e=>{if(!hasVideo)return;const r=e.currentTarget.getBoundingClientRect();vid.currentTime=(e.clientX-r.left)/r.width*duration};
+$("markBody").onclick=e=>{const d=e.target.dataset.del;if(d!=null){marks.splice(+d,1);render();return}const tr=e.target.closest("tr[data-i]");if(tr&&hasVideo){vid.pause();vid.currentTime=marks[+tr.dataset.i].t}};
+
+$("keys").innerHTML=Object.entries(TYPES).map(([t,o])=>`<button class="key" data-t="${t}"><kbd>${o.k}</kbd><span class="dot" style="background:var(${o.c})"></span>${o.label}</button>`).join("")+
+ `<button class="key" data-t="undo"><kbd>Z</kbd>Annuler le dernier</button><div class="key"><kbd>␣</kbd>Lecture / pause</div><div class="key"><kbd>← →</kbd>Image par image (Maj ×10)</div>`;
+$("keys").onclick=e=>{const b=e.target.closest("[data-t]");if(!b)return;b.dataset.t=="undo"?undo():addMark(b.dataset.t)};
+document.addEventListener("keydown",e=>{
+  if(["INPUT","SELECT","TEXTAREA"].includes(e.target.tagName))return;
+  const k=e.key.toLowerCase();
+  if(k==" "){e.preventDefault();toggle()}
+  else if(k=="arrowleft"){e.preventDefault();step(e.shiftKey?-10:-1)}
+  else if(k=="arrowright"){e.preventDefault();step(e.shiftKey?10:1)}
+  else if(k=="z"||k=="backspace"){e.preventDefault();undo()}
+  else if(KEYMAP[k]&&!e.metaKey&&!e.ctrlKey){e.preventDefault();addMark(KEYMAP[k])}
+});
+["f_bassin","f_dist","f_cyc","f_fps"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin")fillDist();render()}));
+window.addEventListener("resize",()=>drawChart(compute().rows));
+
+// save / load
+const LS="espadon-web-analyses";
+const getSaved=()=>{try{return JSON.parse(localStorage.getItem(LS))||[]}catch{return[]}};
+const setSaved=a=>{try{localStorage.setItem(LS,JSON.stringify(a));return true}catch{return false}};
+const meta=()=>({nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
+function applyMeta(m){$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_fps").value=m.fps||25;$("f_cyc").value=m.cycle||1}
+function renderSaved(){const a=getSaved();$("saved").innerHTML=a.length?a.map((x,i)=>`<div class="it"><div><b>${x.meta.nageur||"Sans nom"}</b> · ${x.meta.distance} m ${x.meta.nage} · ${x.meta.tour} · <span class="note">${x.meta.competition} ${x.meta.date}</span></div><button data-load="${i}">Ouvrir</button><button class="x" data-rm="${i}" aria-label="Supprimer">×</button></div>`).join(""):`<p class="note">Rien pour l'instant. Les analyses restent dans ce navigateur. Utilise « Copier en JSON » pour les sauvegarder ailleurs.</p>`}
+$("saved").onclick=e=>{const a=getSaved();if(e.target.dataset.load!=null){const x=a[+e.target.dataset.load];applyMeta(x.meta);marks=x.marks;sample=false;$("sampleBadge").hidden=true;render()}
+  if(e.target.dataset.rm!=null){if(e.target.dataset.confirm){a.splice(+e.target.dataset.rm,1);setSaved(a);renderSaved()}else{e.target.dataset.confirm=1;e.target.textContent="Confirmer ?";e.target.style.fontSize="12px"}}};
+$("btnSave").onclick=()=>{const a=getSaved(),m=meta();const i=a.findIndex(x=>x.meta.nageur==m.nageur&&x.meta.distance==m.distance&&x.meta.tour==m.tour&&x.meta.competition==m.competition);
+  const rec={meta:m,marks,saved:new Date().toISOString()};i>=0?a[i]=rec:a.unshift(rec);const ok=setSaved(a);renderSaved();$("btnSave").textContent=ok?"Enregistré":"Stockage indisponible";setTimeout(()=>$("btnSave").textContent="Enregistrer",1500)};
+$("btnNew").onclick=()=>{marks=[];sample=false;$("sampleBadge").hidden=true;$("f_nageur").value="";render()};
+$("imp").onchange=async e=>{try{const d=JSON.parse(await e.target.files[0].text());const list=Array.isArray(d)?d:[d];const a=getSaved();list.forEach(x=>x.meta&&x.marks&&a.unshift(x));setSaved(a);renderSaved()}catch{$("imp").value=""}};
+
+function copy(txt,btn){const o=btn.textContent;const done=ok=>{btn.textContent=ok?"Copié":"Sélectionne le texte ci-dessous";setTimeout(()=>btn.textContent=o,1600)};
+  navigator.clipboard?.writeText(txt).then(()=>done(true)).catch(()=>{$("out").hidden=false;$("out").value=txt;$("out").select();done(false)})||(( $("out").hidden=false),($("out").value=txt),done(false))}
+$("cpJson").onclick=e=>copy(JSON.stringify({meta:meta(),marks},null,1),e.target);
+$("cpCsv").onclick=e=>{const r=compute(),m=meta();const L=[`# ${m.nageur};${m.distance} m ${m.nage};${m.tour};${m.competition};${m.date}`,`Réaction;${fmt(r.react)}`,`Vol;${fmt(r.vol)}`,`Temps 15 m;${fmt(r.t15)}`,`Temps final;${fmt(r.final)}`,"",
+  "De (m);À (m);Temps cumulé (s);Temps section (s);Vitesse (m/s);Cycles;Fréquence (c/min);Amplitude (m/c);Respirations",
+  ...r.rows.map(x=>[x.from,x.to,fmt(x.t),fmt(x.dt),fmt(x.v),x.n,fmt(x.freq,1),fmt(x.amp),x.br].join(";")),"","Longueur;Passage (s);Temps longueur (s);Coulée (s);Cycles;Respirations",
+  ...r.lens.map(x=>[x.n,fmt(x.split),fmt(x.lap),fmt(x.coulee),x.cycles,x.br].join(";"))];copy(L.join("\n"),e.target)};
+
+// rapport PDF
+function buildPdf(){
+  const {jsPDF}=window.jspdf, doc=new jsPDF({unit:"mm",format:"a4"}), r=compute(), m=meta();
+  const INK=[14,42,59],RED=[214,69,61],BLUE=[31,111,149],GREEN=[46,156,106],MUT=[85,112,130],W=210;
+  const f=(x,d=2)=>x==null||!isFinite(x)?"-":x.toFixed(d).replace(".",",");
+  const ft=s=>fmtT(s).replace("—","-");
+  // bandeau
+  doc.setFillColor(...INK);doc.rect(0,0,W,30,"F");
+  [RED,[255,255,255],BLUE,[255,255,255]].forEach((c,i)=>{doc.setFillColor(...c);for(let x=i*6;x<W;x+=24)doc.rect(x,30,6,1.6,"F")});
+  doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(22);doc.text("ESPADON",14,15);
+  doc.setTextColor(...RED);doc.text("WEB",14+doc.getTextWidth("ESPADON "),15);
+  doc.setTextColor(200,220,229);doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text("Rapport d'analyse de course",14,22);
+  doc.setFontSize(9);doc.text(new Date().toLocaleDateString("fr-FR"),W-14,22,{align:"right"});
+  // identité
+  doc.setTextColor(...INK);doc.setFont("helvetica","bold");doc.setFontSize(18);doc.text(m.nageur||"Nageur",14,44);
+  doc.setFont("helvetica","normal");doc.setFontSize(11);doc.setTextColor(...MUT);
+  const dt=m.date?new Date(m.date).toLocaleDateString("fr-FR"):"";
+  doc.text(`${m.distance} m ${m.nage}  |  ${m.tour}  |  Bassin ${m.bassin} m  |  Couloir ${m.couloir}`,14,51);
+  doc.text(`${m.competition}${dt?"  |  "+dt:""}`,14,57);
+  // KPI
+  const k=[["Temps final",r.final!=null?ft(r.final)+" s":"-"],["Réaction",f(r.react)+" s"],["Vol",f(r.vol)+" s"],["Temps 15 m",f(r.t15)+" s"],["Fréquence moy.",r.freq?f(r.freq,1)+" c/min":"-"]];
+  const kw=(W-28)/k.length;
+  k.forEach(([a,b],i)=>{const x=14+i*kw;doc.setFillColor(238,244,246);doc.rect(x,63,kw-3,20,"F");doc.setFillColor(...(i?BLUE:RED));doc.rect(x,63,1.2,20,"F");
+    doc.setTextColor(...INK);doc.setFont("courier","bold");doc.setFontSize(13);doc.text(b,x+4,73);
+    doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(...MUT);doc.text(a.toUpperCase(),x+4,79)});
+  // graphique vitesse
+  let y=92;doc.setTextColor(...INK);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("VITESSE PAR SECTION (m/s)",14,y);
+  const rows=r.rows;if(rows.length){
+    const cx=24,cw=W-14-cx,cy=y+5,ch=45,vmax=Math.ceil(Math.max(...rows.map(x=>x.v))*2)/2,vmin=Math.max(0,Math.floor(Math.min(...rows.map(x=>x.v))*2)/2-.5);
+    const Y=v=>cy+ch*(1-(v-vmin)/(vmax-vmin));doc.setFont("courier","normal");doc.setFontSize(7);
+    for(let v=vmin;v<=vmax+1e-6;v+=.5){doc.setDrawColor(207,221,227);doc.line(cx,Y(v),cx+cw,Y(v));doc.setTextColor(...MUT);doc.text(f(v,1),cx-2,Y(v)+1,{align:"right"})}
+    const bw=cw/rows.length;rows.forEach((x,i)=>{doc.setFillColor(...(x.from%m.bassin==0?GREEN:BLUE));doc.rect(cx+i*bw+1,Y(x.v),bw-2,cy+ch-Y(x.v),"F");
+      doc.setTextColor(...MUT);doc.text(String(x.to),cx+i*bw+bw/2,cy+ch+4,{align:"center"});
+      doc.setTextColor(...INK);doc.text(f(x.v),cx+i*bw+bw/2,Y(x.v)-1.2,{align:"center"})});
+    doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(...MUT);
+    doc.setFillColor(...GREEN);doc.rect(W-80,y-2.5,3,3,"F");doc.text("Sortie de mur / départ",W-76,y);
+    doc.setFillColor(...BLUE);doc.rect(W-45,y-2.5,3,3,"F");doc.text("Nage",W-41,y);
+    y=cy+ch+10}
+  // tableaux
+  const head={fillColor:INK,textColor:255,fontStyle:"bold",fontSize:8,halign:"right"};
+  const body=[];let li=0;rows.forEach(x=>{body.push([`${x.from}-${x.to} m`,ft(x.t),f(x.dt),f(x.v),x.n||"-",f(x.freq,1),f(x.amp),x.br||"-"]);
+    if(x.wall){const L=r.lens[li++];body.push({lap:1,cells:[`Longueur ${L.n}`,ft(L.split),f(L.lap),`Coulée ${f(L.coulee)} s`,"",`${L.cycles} cycles`,"",L.br]})}});
+  doc.autoTable({startY:y,head:[["Section","Cumulé","Section (s)","Vitesse","Cycles","Fréq. c/min","Ampl. m/c","Resp."]],
+    body:body.map(b=>b.lap?b.cells:b),theme:"plain",headStyles:head,
+    styles:{font:"helvetica",fontSize:8.5,cellPadding:1.6,halign:"right",textColor:INK,lineColor:[207,221,227],lineWidth:{bottom:.2}},
+    columnStyles:{0:{halign:"left"}},margin:{left:14,right:14},
+    didParseCell:d=>{if(d.section=="head"&&d.column.index==0)d.cell.styles.halign="left";if(d.section=="body"&&body[d.row.index].lap){d.cell.styles.fillColor=[238,244,246];d.cell.styles.fontStyle="bold"}}});
+  // pied
+  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(7.5);doc.setTextColor(...MUT);doc.setFont("helvetica","normal");
+    doc.text("Espadon Web - "+(m.nageur||"")+" - "+m.distance+" m "+m.nage,14,290);doc.text(`${i} / ${n}`,W-14,290,{align:"right"})}
+  return doc;
+}
+$("btnPdf").onclick=()=>{const m=meta();const name=`${(m.nageur||"analyse").replace(/\s+/g,"_")}_${m.distance}${m.nage.replace(/\s+/g,"")}_${m.tour}.pdf`;
+  try{buildPdf().save(name)}catch(e){$("btnPdf").textContent="PDF indisponible";console.error(e)}};
+
+// exemple : 100 m NL bassin 50 m
+function loadSample(){
+  const T=2;marks=[{type:"start",t:T},{type:"react",t:T+.66},{type:"entry",t:T+1.02}];
+  const secT=[1.95,6.35,11.28,16.42,21.65,24.38,26.9,31.72,37.12,42.63,48.28,51.12];
+  secT.forEach(t=>marks.push({type:"section",t:+(T+t).toFixed(2)}));
+  marks.push({type:"brk",t:T+5.3},{type:"brk",t:T+24.38+4.4});
+  const addStrokes=(a,b,p)=>{let n=0;for(let t=a;t<b;t+=p){marks.push({type:"stroke",t:+(T+t).toFixed(2)});if(n++%4==3)marks.push({type:"breath",t:+(T+t+.2).toFixed(2)})}};
+  addStrokes(5.55,24.2,1.02);addStrokes(29.05,51,1.07);
+  $("f_date").value=new Date().toISOString().slice(0,10);
+}
+fillDist();$("f_dist").value=100;loadSample();renderSaved();render();
+</script>
+
+</body></html>
