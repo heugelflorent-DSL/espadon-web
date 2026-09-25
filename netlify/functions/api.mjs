@@ -138,6 +138,7 @@ export default async (req) => {
         await setJSON(`users/${u.id}`, u);
         return generic;
       }
+      if (isAdminEmail(u.email) && u.status === "pending") { u.status = "active"; u.role = "superadmin"; }
       if (u.status === "pending") return err(403, "Ton compte attend la validation de l'administrateur.");
       if (u.status !== "active") return err(403, "Ce compte est désactivé.");
       if (isAdminEmail(u.email) && u.role !== "superadmin") u.role = "superadmin";
