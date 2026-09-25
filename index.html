@@ -92,11 +92,15 @@ dialog::backdrop{background:rgba(7,20,28,.55)}
 .pill{font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--bg);border:1px solid var(--line)}
 .pill.pending{background:var(--lane);color:#0E2A3B;border-color:var(--lane)}.pill.disabled{color:var(--muted)}
 tr.best td{font-weight:600}tr.best td:first-child::after{content:" ★";color:var(--c-section)}
+.lockbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:6px;background:var(--lane);color:#0E2A3B}
+.lockbar span{flex:1;min-width:220px}
+body.locked .panel input,body.locked .panel select,body.locked .keys,body.locked #drop,body.locked .marks select,body.locked #imp+*,body.locked .marks .x{pointer-events:none;opacity:.55}
 svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <div class="wrap">
+<div class="lockbar" id="lockbar" hidden><span><b>Mode découverte.</b> Connecte-toi pour charger une vidéo, pointer et enregistrer une analyse. L'exemple ci-dessous montre ce que produit l'outil.</span><button class="primary" id="lockLogin">Se connecter</button></div>
 <header class="top">
   <div><h1>Espadon <span>Web</span></h1><p class="sub">Analyse vidéo de course · pointage au clavier, image par image</p></div>
   <div class="grow"></div>
@@ -223,8 +227,9 @@ function sectionDist(){const bd=boundaries();const map=new Map();let last=0;
   for(const m of sorted())if(m.type=="section"){let d=m.d;if(d==null){d=bd.find(x=>x>last)??null}map.set(m,d);if(d!=null)last=Math.max(last,d)}return map}
 function nextLabel(){const n=nextDist(hasVideo?vid.currentTime:null);if(!marks.some(m=>m.type=="start"||m.type=="react"))return"Prochain : S départ ou D décollage";return n!=null?`Prochain repère X : ${n} m`:"Course terminée"}
 
-function addMark(type){const t=hasVideo?vid.currentTime:(marks.length?Math.max(...marks.map(m=>m.t))+0.5:0);const m={type,t:+t.toFixed(3)};if(type=="section")m.d=nextDist(m.t);marks.push(m);render()}
-function undo(){if(!marks.length)return;let li=0;marks.forEach((m,i)=>{if(i>li)li=i});marks.splice(li,1);render()}
+const locked=()=>typeof serverOK!="undefined"&&serverOK&&!user;
+function addMark(type){if(locked())return;const t=hasVideo?vid.currentTime:(marks.length?Math.max(...marks.map(m=>m.t))+0.5:0);const m={type,t:+t.toFixed(3)};if(type=="section")m.d=nextDist(m.t);marks.push(m);render()}
+function undo(){if(locked())return;if(!marks.length)return;let li=0;marks.forEach((m,i)=>{if(i>li)li=i});marks.splice(li,1);render()}
 
 function compute(){
   const T0=t0(), s=sorted(), dmap=sectionDist(), bd=boundaries(), pool=+$("f_bassin").value, D=+$("f_dist").value;
@@ -332,7 +337,7 @@ function updateTime(){const t=hasVideo?vid.currentTime:0;const rel=t-t0();
   const c=$("cur");if(c)c.style.left=(t/duration*100)+"%"}
 
 // video
-function loadFile(f){if(!f||!f.type.startsWith("video"))return;vid.src=URL.createObjectURL(f);vid.hidden=false;$("drop").hidden=true;hasVideo=true;
+function loadFile(f){if(locked())return;if(!f||!f.type.startsWith("video"))return;vid.src=URL.createObjectURL(f);vid.hidden=false;$("drop").hidden=true;hasVideo=true;
   if(sample){marks=[];sample=false;$("sampleBadge").hidden=true}render()}
 $("file").onchange=e=>loadFile(e.target.files[0]);
 const st=$("stage");st.addEventListener("dragover",e=>{e.preventDefault();$("drop").classList.add("over")});
@@ -346,12 +351,12 @@ $("bPlay").onclick=toggle;$("bBack").onclick=()=>step(-1);$("bFwd").onclick=()=>
 $("rate").onchange=e=>vid.playbackRate=+e.target.value;
 $("strip").onclick=e=>{if(!hasVideo)return;const r=e.currentTarget.getBoundingClientRect();vid.currentTime=(e.clientX-r.left)/r.width*duration};
 $("markBody").onchange=e=>{const i=e.target.dataset.sd;if(i!=null){marks[+i].d=e.target.value===""?null:+e.target.value;e.target.blur();render()}};
-$("markBody").onclick=e=>{if(e.target.tagName=="SELECT")return;const d=e.target.dataset.del;if(d!=null){marks.splice(+d,1);render();return}const tr=e.target.closest("tr[data-i]");if(tr&&hasVideo){vid.pause();vid.currentTime=marks[+tr.dataset.i].t}};
+$("markBody").onclick=e=>{if(e.target.tagName=="SELECT")return;if(locked()&&e.target.dataset.del!=null)return;const d=e.target.dataset.del;if(d!=null){marks.splice(+d,1);render();return}const tr=e.target.closest("tr[data-i]");if(tr&&hasVideo){vid.pause();vid.currentTime=marks[+tr.dataset.i].t}};
 
 $("keys").innerHTML=Object.entries(TYPES).map(([t,o])=>`<button class="key" data-t="${t}"><kbd>${o.k}</kbd><span class="dot" style="background:var(${o.c})"></span>${o.label}</button>`).join("")+
  `<button class="key" data-t="undo"><kbd>Z</kbd>Annuler le dernier</button><div class="key"><kbd>␣</kbd>Lecture / pause</div><div class="key"><kbd>← →</kbd>Image par image (Maj ×10)</div>`;
 $("keys").onclick=e=>{const b=e.target.closest("[data-t]");if(!b)return;b.dataset.t=="undo"?undo():addMark(b.dataset.t)};
-document.addEventListener("keydown",e=>{
+document.addEventListener("keydown",e=>{if(locked())return;
   if(["INPUT","SELECT","TEXTAREA"].includes(e.target.tagName))return;
   const k=e.key.toLowerCase();
   if(k==" "){e.preventDefault();toggle()}
@@ -463,7 +468,7 @@ $("dlgClose").onclick=()=>dlg.close();
 function summaryOf(){const r=compute(),L=r.lens,avg=k=>{const v=L.map(x=>x[k]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b)/v.length:null};
   return{temps:r.off??r.final,final:r.final,off:r.off,react:r.react,t15:r.t15,couleeDep:r.depart?.coulee??null,couleeDepD:r.depart?.couleeD??null,freq:avg("freq"),amp:avg("amp"),tempo:avg("tempo"),
     approche:r.totals?.approche??null,virage:(()=>{const v=r.turns.filter(t=>t.label!="Arrivée"&&t.total!=null).map(t=>t.total);return v.length?v.reduce((a,b)=>a+b)/v.length:null})(),longueurs:L.length}}
-function setUser(u){user=u;const on=!!u;$("btnHist").hidden=!on;$("btnAdmin").hidden=!(on&&u.role=="superadmin");$("btnAuth").hidden=!serverOK;
+function setUser(u){user=u;const lk=serverOK&&!u;document.body.classList.toggle("locked",lk);$("lockbar").hidden=!lk;document.querySelectorAll(".panel input,.panel select").forEach(el=>{if(!el.closest("dialog"))el.disabled=lk});const on=!!u;$("btnHist").hidden=!on;$("btnAdmin").hidden=!(on&&u.role=="superadmin");$("btnAuth").hidden=!serverOK;
   $("btnAuth").textContent=on?u.name:"Se connecter";$("savedTitle").textContent=on?"Mes dernières analyses":"Analyses enregistrées (cet appareil)";refreshList()}
 function setEditing(id,label){currentId=id;$("editBadge").hidden=!id;$("editBadge").textContent=id?"Historique : "+label:""}
 async function refreshList(){if(!user){renderSaved();return}
@@ -476,10 +481,10 @@ async function openAnalysis(id){try{const a=(await api("GET","/analyses/"+id)).a
 function alertMsg(t){openDlg("Information",`<p class="msg err">${esc(t)}</p>`)}
 // enregistrement : serveur si connecté, sinon navigateur
 const saveLocal=$("btnSave").onclick;
-$("btnSave").onclick=async()=>{if(!user)return saveLocal();const b=$("btnSave");b.disabled=true;b.textContent="Enregistrement…";
+$("btnSave").onclick=async()=>{if(locked())return authDialog();if(!user)return saveLocal();const b=$("btnSave");b.disabled=true;b.textContent="Enregistrement…";
   try{const r=await api("POST","/analyses"+(currentId?"/"+currentId:""),{meta:meta(),marks,summary:summaryOf()});const m=meta();setEditing(r.analysis.id,`${m.nageur} ${m.distance} m`);b.textContent="Enregistré";refreshList()}
   catch(e){b.textContent="Échec";alertMsg(e.status==401?"Session expirée, reconnecte-toi.":e.message)}finally{b.disabled=false;setTimeout(()=>b.textContent="Enregistrer",1500)}};
-const newAnalysis=$("btnNew").onclick;$("btnNew").onclick=()=>{setEditing(null);newAnalysis()};
+const newAnalysis=$("btnNew").onclick;$("btnNew").onclick=()=>{if(locked())return authDialog();setEditing(null);newAnalysis()};
 $("saved").addEventListener("click",e=>{const id=e.target.dataset.open;if(id)openAnalysis(id)});
 // --- connexion / inscription ---
 function authDialog(mode="login",note=""){
@@ -496,7 +501,7 @@ function authDialog(mode="login",note=""){
   $("dlgBody").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>authDialog(b.dataset.m));
   $("fAuth").onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),m=$("aMsg");m.hidden=false;m.className="msg";m.textContent="…";
     try{if(mode=="signup"){const r=await api("POST","/signup",f);authDialog("login",r.message)}else{const r=await api("POST","/login",f);setUser(r.user);dlg.close()}}catch(x){m.className="msg err";m.textContent=x.message}}}
-$("btnAuth").onclick=()=>authDialog();
+$("btnAuth").onclick=()=>authDialog();$("lockLogin").onclick=()=>authDialog();
 // --- historique ---
 const fS=x=>x==null?"—":fmtT(x);
 async function openHistory(){openDlg("Historique","<p class='note'>Chargement…</p>");
