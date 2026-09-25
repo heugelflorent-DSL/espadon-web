@@ -82,20 +82,39 @@ textarea{width:100%;min-height:120px;font-family:var(--mono);font-size:12px;back
 .saved{display:flex;flex-direction:column;gap:6px}
 .saved .it{display:flex;gap:8px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:4px}
 .saved .it div{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+dialog{border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);padding:0;width:min(1100px,calc(100vw - 24px));max-height:calc(100vh - 40px)}
+dialog::backdrop{background:rgba(7,20,28,.55)}
+.dlg-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:1}
+#dlgBody{padding:14px 16px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+#dlgBody form{display:grid;gap:10px;max-width:380px}
+.tabs{display:flex;gap:6px}.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.msg{font-size:13px;padding:8px 10px;border-radius:4px;background:var(--bg)}.msg.err{color:var(--accent)}
+.pill{font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--bg);border:1px solid var(--line)}
+.pill.pending{background:var(--lane);color:#0E2A3B;border-color:var(--lane)}.pill.disabled{color:var(--muted)}
+tr.best td{font-weight:600}tr.best td:first-child::after{content:" ★";color:var(--c-section)}
+.lockbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:6px;background:var(--lane);color:#0E2A3B}
+.lockbar span{flex:1;min-width:220px}
+body.locked .panel input,body.locked .panel select,body.locked .keys,body.locked #drop,body.locked .marks select,body.locked #imp+*,body.locked .marks .x{pointer-events:none;opacity:.55}
 svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <div class="wrap">
+<div class="lockbar" id="lockbar" hidden><span><b>Mode découverte.</b> Connecte-toi pour charger une vidéo, pointer et enregistrer une analyse. L'exemple ci-dessous montre ce que produit l'outil.</span><button class="primary" id="lockLogin">Se connecter</button></div>
 <header class="top">
   <div><h1>Espadon <span>Web</span></h1><p class="sub">Analyse vidéo de course · pointage au clavier, image par image</p></div>
   <div class="grow"></div>
   <div class="row">
     <span class="badge" id="sampleBadge">Exemple chargé</span>
+    <span class="badge" id="editBadge" hidden></span>
+    <button id="btnHist" hidden>Historique</button>
+    <button id="btnAdmin" hidden>Admin</button>
+    <button id="btnAuth" hidden>Se connecter</button>
     <button id="btnNew">Nouvelle analyse</button>
     <button class="primary" id="btnSave">Enregistrer</button>
   </div>
 </header>
+<dialog id="dlg"><div class="dlg-head"><h2 id="dlgTitle"></h2><div class="grow"></div><button id="dlgClose" aria-label="Fermer">×</button></div><div id="dlgBody"></div></dialog>
 
 <section class="panel">
   <div class="fields">
@@ -147,7 +166,7 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
   <section class="panel">
     <div class="row"><h2>Pointages</h2><div class="grow"></div><span class="note" id="markCount"></span></div>
     <div class="marks"><table><thead><tr><th>Évènement</th><th>Temps course</th><th>Repère</th><th></th></tr></thead><tbody id="markBody"></tbody></table></div>
-    <h2>Analyses enregistrées</h2>
+    <h2 id="savedTitle">Analyses enregistrées</h2>
     <div class="saved" id="saved"></div>
     <div class="row"><label for="imp" style="cursor:pointer"><span class="key" style="display:inline-flex">Importer un fichier JSON</span></label><input id="imp" type="file" accept=".json,application/json" hidden></div>
   </section>
@@ -208,8 +227,9 @@ function sectionDist(){const bd=boundaries();const map=new Map();let last=0;
   for(const m of sorted())if(m.type=="section"){let d=m.d;if(d==null){d=bd.find(x=>x>last)??null}map.set(m,d);if(d!=null)last=Math.max(last,d)}return map}
 function nextLabel(){const n=nextDist(hasVideo?vid.currentTime:null);if(!marks.some(m=>m.type=="start"||m.type=="react"))return"Prochain : S départ ou D décollage";return n!=null?`Prochain repère X : ${n} m`:"Course terminée"}
 
-function addMark(type){const t=hasVideo?vid.currentTime:(marks.length?Math.max(...marks.map(m=>m.t))+0.5:0);const m={type,t:+t.toFixed(3)};if(type=="section")m.d=nextDist(m.t);marks.push(m);render()}
-function undo(){if(!marks.length)return;let li=0;marks.forEach((m,i)=>{if(i>li)li=i});marks.splice(li,1);render()}
+const locked=()=>typeof serverOK!="undefined"&&serverOK&&!user;
+function addMark(type){if(locked())return;const t=hasVideo?vid.currentTime:(marks.length?Math.max(...marks.map(m=>m.t))+0.5:0);const m={type,t:+t.toFixed(3)};if(type=="section")m.d=nextDist(m.t);marks.push(m);render()}
+function undo(){if(locked())return;if(!marks.length)return;let li=0;marks.forEach((m,i)=>{if(i>li)li=i});marks.splice(li,1);render()}
 
 function compute(){
   const T0=t0(), s=sorted(), dmap=sectionDist(), bd=boundaries(), pool=+$("f_bassin").value, D=+$("f_dist").value;
@@ -317,7 +337,7 @@ function updateTime(){const t=hasVideo?vid.currentTime:0;const rel=t-t0();
   const c=$("cur");if(c)c.style.left=(t/duration*100)+"%"}
 
 // video
-function loadFile(f){if(!f||!f.type.startsWith("video"))return;vid.src=URL.createObjectURL(f);vid.hidden=false;$("drop").hidden=true;hasVideo=true;
+function loadFile(f){if(locked())return;if(!f||!f.type.startsWith("video"))return;vid.src=URL.createObjectURL(f);vid.hidden=false;$("drop").hidden=true;hasVideo=true;
   if(sample){marks=[];sample=false;$("sampleBadge").hidden=true}render()}
 $("file").onchange=e=>loadFile(e.target.files[0]);
 const st=$("stage");st.addEventListener("dragover",e=>{e.preventDefault();$("drop").classList.add("over")});
@@ -331,12 +351,12 @@ $("bPlay").onclick=toggle;$("bBack").onclick=()=>step(-1);$("bFwd").onclick=()=>
 $("rate").onchange=e=>vid.playbackRate=+e.target.value;
 $("strip").onclick=e=>{if(!hasVideo)return;const r=e.currentTarget.getBoundingClientRect();vid.currentTime=(e.clientX-r.left)/r.width*duration};
 $("markBody").onchange=e=>{const i=e.target.dataset.sd;if(i!=null){marks[+i].d=e.target.value===""?null:+e.target.value;e.target.blur();render()}};
-$("markBody").onclick=e=>{if(e.target.tagName=="SELECT")return;const d=e.target.dataset.del;if(d!=null){marks.splice(+d,1);render();return}const tr=e.target.closest("tr[data-i]");if(tr&&hasVideo){vid.pause();vid.currentTime=marks[+tr.dataset.i].t}};
+$("markBody").onclick=e=>{if(e.target.tagName=="SELECT")return;if(locked()&&e.target.dataset.del!=null)return;const d=e.target.dataset.del;if(d!=null){marks.splice(+d,1);render();return}const tr=e.target.closest("tr[data-i]");if(tr&&hasVideo){vid.pause();vid.currentTime=marks[+tr.dataset.i].t}};
 
 $("keys").innerHTML=Object.entries(TYPES).map(([t,o])=>`<button class="key" data-t="${t}"><kbd>${o.k}</kbd><span class="dot" style="background:var(${o.c})"></span>${o.label}</button>`).join("")+
  `<button class="key" data-t="undo"><kbd>Z</kbd>Annuler le dernier</button><div class="key"><kbd>␣</kbd>Lecture / pause</div><div class="key"><kbd>← →</kbd>Image par image (Maj ×10)</div>`;
 $("keys").onclick=e=>{const b=e.target.closest("[data-t]");if(!b)return;b.dataset.t=="undo"?undo():addMark(b.dataset.t)};
-document.addEventListener("keydown",e=>{
+document.addEventListener("keydown",e=>{if(locked())return;
   if(["INPUT","SELECT","TEXTAREA"].includes(e.target.tagName))return;
   const k=e.key.toLowerCase();
   if(k==" "){e.preventDefault();toggle()}
@@ -438,6 +458,89 @@ function loadSample(){
   addStrokes(5.55,24.2,0.51);addStrokes(29.05,51,0.535);
   $("f_date").value=new Date().toISOString().slice(0,10);
 }
+// ================= comptes, historique, admin (serveur Netlify) =================
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let user=null, serverOK=false, currentId=null, serverList=[];
+async function api(method,path,body){const r=await fetch("/api"+path,{method,credentials:"same-origin",headers:{"x-espadon":"1",...(body?{"content-type":"application/json"}:{})},body:body?JSON.stringify(body):undefined});
+  let j={};try{j=await r.json()}catch{}if(!r.ok)throw Object.assign(new Error(j.error||("Erreur "+r.status)),{status:r.status});return j}
+const dlg=$("dlg");const openDlg=(t,html)=>{$("dlgTitle").textContent=t;$("dlgBody").innerHTML=html;if(!dlg.open)dlg.showModal()};
+$("dlgClose").onclick=()=>dlg.close();
+function summaryOf(){const r=compute(),L=r.lens,avg=k=>{const v=L.map(x=>x[k]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b)/v.length:null};
+  return{temps:r.off??r.final,final:r.final,off:r.off,react:r.react,t15:r.t15,couleeDep:r.depart?.coulee??null,couleeDepD:r.depart?.couleeD??null,freq:avg("freq"),amp:avg("amp"),tempo:avg("tempo"),
+    approche:r.totals?.approche??null,virage:(()=>{const v=r.turns.filter(t=>t.label!="Arrivée"&&t.total!=null).map(t=>t.total);return v.length?v.reduce((a,b)=>a+b)/v.length:null})(),longueurs:L.length}}
+function setUser(u){user=u;const lk=serverOK&&!u;document.body.classList.toggle("locked",lk);$("lockbar").hidden=!lk;document.querySelectorAll(".panel input,.panel select").forEach(el=>{if(!el.closest("dialog"))el.disabled=lk});const on=!!u;$("btnHist").hidden=!on;$("btnAdmin").hidden=!(on&&u.role=="superadmin");$("btnAuth").hidden=!serverOK;
+  $("btnAuth").textContent=on?u.name:"Se connecter";$("savedTitle").textContent=on?"Mes dernières analyses":"Analyses enregistrées (cet appareil)";refreshList()}
+function setEditing(id,label){currentId=id;$("editBadge").hidden=!id;$("editBadge").textContent=id?"Historique : "+label:""}
+async function refreshList(){if(!user){renderSaved();return}
+  try{serverList=(await api("GET","/analyses")).analyses}catch(e){serverList=[]}
+  const mine=user.role=="superadmin"?serverList:serverList;
+  $("saved").innerHTML=mine.length?mine.slice().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).slice(0,8).map(a=>`<div class="it"><div><b>${esc(a.meta.nageur||"Sans nom")}</b> · ${esc(a.meta.distance)} m ${esc(a.meta.nage)} · ${esc(a.meta.tour)} · <span class="note">${esc(a.meta.competition)} ${esc(a.meta.date)}${a.ownerName&&user.role=="superadmin"?" · "+esc(a.ownerName):""}</span></div><button data-open="${a.id}">Ouvrir</button></div>`).join("")+`<button id="seeAll">Tout l'historique</button>`:`<p class="note">Aucune analyse enregistrée sur ton compte pour l'instant. Clique sur « Enregistrer » après un pointage.</p>`;
+  const b=$("seeAll");if(b)b.onclick=openHistory}
+async function openAnalysis(id){try{const a=(await api("GET","/analyses/"+id)).analysis;applyMeta(a.meta);marks=a.marks;sample=false;$("sampleBadge").hidden=true;
+  setEditing(a.id,`${a.meta.nageur||""} ${a.meta.distance||""} m`);render();dlg.open&&dlg.close();window.scrollTo({top:0,behavior:"smooth"})}catch(e){alertMsg(e.message)}}
+function alertMsg(t){openDlg("Information",`<p class="msg err">${esc(t)}</p>`)}
+// enregistrement : serveur si connecté, sinon navigateur
+const saveLocal=$("btnSave").onclick;
+$("btnSave").onclick=async()=>{if(locked())return authDialog();if(!user)return saveLocal();const b=$("btnSave");b.disabled=true;b.textContent="Enregistrement…";
+  try{const r=await api("POST","/analyses"+(currentId?"/"+currentId:""),{meta:meta(),marks,summary:summaryOf()});const m=meta();setEditing(r.analysis.id,`${m.nageur} ${m.distance} m`);b.textContent="Enregistré";refreshList()}
+  catch(e){b.textContent="Échec";alertMsg(e.status==401?"Session expirée, reconnecte-toi.":e.message)}finally{b.disabled=false;setTimeout(()=>b.textContent="Enregistrer",1500)}};
+const newAnalysis=$("btnNew").onclick;$("btnNew").onclick=()=>{if(locked())return authDialog();setEditing(null);newAnalysis()};
+$("saved").addEventListener("click",e=>{const id=e.target.dataset.open;if(id)openAnalysis(id)});
+// --- connexion / inscription ---
+function authDialog(mode="login",note=""){
+  if(user){openDlg("Mon compte",`<p>${esc(user.name)} · ${esc(user.email)} · ${user.role=="superadmin"?"super admin":"entraîneur"}</p>
+    <form id="fPw"><h2>Changer le mot de passe</h2><label>Mot de passe actuel<input type="password" name="current" autocomplete="current-password" required></label><label>Nouveau (8 caractères min.)<input type="password" name="password" minlength="8" autocomplete="new-password" required></label><button class="primary">Changer</button><p class="msg" id="aMsg" hidden></p></form>
+    <div class="row"><button id="bOut">Se déconnecter</button></div>`);
+    $("bOut").onclick=async()=>{await api("POST","/logout").catch(()=>{});setEditing(null);setUser(null);dlg.close()};
+    $("fPw").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),m=$("aMsg");m.hidden=false;try{await api("POST","/password",Object.fromEntries(f));m.className="msg";m.textContent="Mot de passe changé."}catch(x){m.className="msg err";m.textContent=x.message}};return}
+  openDlg(mode=="login"?"Connexion":"Créer un compte",`<div class="tabs"><button data-m="login" aria-pressed="${mode=="login"}">Connexion</button><button data-m="signup" aria-pressed="${mode=="signup"}">Créer un compte</button></div>
+    <form id="fAuth">${mode=="signup"?'<label>Nom et prénom<input name="name" autocomplete="name" required></label>':""}<label>E-mail<input type="email" name="email" autocomplete="email" required></label>
+    <label>Mot de passe${mode=="signup"?" (8 caractères min.)":""}<input type="password" name="password" minlength="${mode=="signup"?8:1}" autocomplete="${mode=="signup"?"new-password":"current-password"}" required></label>
+    <button class="primary">${mode=="login"?"Se connecter":"Demander un compte"}</button><p class="msg${note?"":" err"}" id="aMsg" ${note?"":"hidden"}>${esc(note)}</p></form>
+    ${mode=="signup"?'<p class="note">Ton compte sera actif après validation par l\'administrateur. Tu ne verras que tes propres analyses.</p>':""}`);
+  $("dlgBody").querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>authDialog(b.dataset.m));
+  $("fAuth").onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),m=$("aMsg");m.hidden=false;m.className="msg";m.textContent="…";
+    try{if(mode=="signup"){const r=await api("POST","/signup",f);authDialog("login",r.message)}else{const r=await api("POST","/login",f);setUser(r.user);dlg.close()}}catch(x){m.className="msg err";m.textContent=x.message}}}
+$("btnAuth").onclick=()=>authDialog();$("lockLogin").onclick=()=>authDialog();
+// --- historique ---
+const fS=x=>x==null?"—":fmtT(x);
+async function openHistory(){openDlg("Historique","<p class='note'>Chargement…</p>");
+  try{serverList=(await api("GET","/analyses")).analyses}catch(e){$("dlgBody").innerHTML=`<p class="msg err">${esc(e.message)}</p>`;return}
+  const admin=user.role=="superadmin";const owners=[...new Map(serverList.map(a=>[a.ownerId,a.ownerName||""])).entries()];
+  const key=n=>String(n||"").trim().toLowerCase();
+  const draw=()=>{const ow=admin?$("hOwner").value:"";const L=serverList.filter(a=>!ow||a.ownerId==ow);
+    const names=[...new Map(L.map(a=>[key(a.meta.nageur),a.meta.nageur||"Sans nom"])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+    const cur=$("hSwimmer").value;$("hSwimmer").innerHTML=`<option value="">Tous les nageurs (${L.length} analyses)</option>`+names.map(([k,n])=>`<option value="${esc(k)}" ${k==cur?"selected":""}>${esc(n)} (${L.filter(a=>key(a.meta.nageur)==k).length})</option>`).join("");
+    const sw=$("hSwimmer").value, ev=$("hEvent").value;let R=L.filter(a=>!sw||key(a.meta.nageur)==sw);
+    const evs=[...new Set(R.map(a=>`${a.meta.distance} m ${a.meta.nage} (${a.meta.bassin} m)`))].sort();
+    $("hEvent").innerHTML=`<option value="">Toutes les épreuves</option>`+evs.map(e=>`<option ${e==ev?"selected":""}>${esc(e)}</option>`).join("");
+    R=R.filter(a=>!$("hEvent").value||`${a.meta.distance} m ${a.meta.nage} (${a.meta.bassin} m)`==$("hEvent").value).sort((a,b)=>String(b.meta.date).localeCompare(String(a.meta.date)));
+    const best={};R.forEach(a=>{const k=key(a.meta.nageur)+"|"+a.meta.distance+a.meta.nage+a.meta.bassin,t=a.summary?.temps;if(t!=null&&(best[k]==null||t<best[k]))best[k]=t});
+    $("hTable").innerHTML=R.length?`<table><thead><tr><th>Date</th><th>Nageur</th><th>Épreuve</th><th>Tour</th><th>Compétition</th><th>Temps</th><th>Réaction</th><th>15 m</th><th>Coulée départ</th><th>Fréq. moy.</th><th>Ampl. moy.</th><th>Virage moy.</th>${admin?"<th>Entraîneur</th>":""}<th></th></tr></thead><tbody>`+
+      R.map(a=>{const s=a.summary||{},m=a.meta,isB=s.temps!=null&&best[key(m.nageur)+"|"+m.distance+m.nage+m.bassin]==s.temps;
+        return`<tr${isB?' class="best"':""}><td>${esc(m.date||"")}</td><td>${esc(m.nageur)}</td><td>${esc(m.distance)} m ${esc(m.nage)} (${esc(m.bassin)})</td><td>${esc(m.tour)}</td><td>${esc(m.competition)}</td><td class="mono">${fS(s.temps)}</td><td class="mono">${fS(s.react)}</td><td class="mono">${fS(s.t15)}</td><td class="mono">${s.couleeDep!=null?fS(s.couleeDep)+(s.couleeDepD!=null?" · "+fmt(s.couleeDepD,1)+" m":""):"—"}</td><td class="mono">${fmt(s.freq,1)}</td><td class="mono">${fmt(s.amp)}</td><td class="mono">${fS(s.virage)}</td>${admin?`<td>${esc(a.ownerName)}</td>`:""}<td><button data-open="${a.id}">Ouvrir</button> <button class="x" data-del="${a.id}" aria-label="Supprimer">×</button></td></tr>`}).join("")+"</tbody></table>":`<p class="note">Aucune analyse pour ce filtre.</p>`};
+  $("dlgBody").innerHTML=`<div class="fields">${admin?`<label>Entraîneur<select id="hOwner"><option value="">Tous</option>${owners.map(([id,n])=>`<option value="${id}">${esc(n)}</option>`).join("")}</select></label>`:""}<label>Nageur<select id="hSwimmer"></select></label><label>Épreuve<select id="hEvent"></select></label></div>
+    <div class="scroll" id="hTable"></div><p class="note">★ meilleur temps du nageur sur l'épreuve. Les temps viennent du temps officiel s'il a été saisi, sinon du pointage.</p>`;
+  ["hOwner","hSwimmer","hEvent"].forEach(id=>$(id)&&$(id).addEventListener("change",draw));draw();
+  $("hTable").onclick=async e=>{if(e.target.dataset.open)openAnalysis(e.target.dataset.open);const d=e.target.dataset.del;
+    if(d){if(!e.target.dataset.confirm){e.target.dataset.confirm=1;e.target.textContent="Confirmer ?";return}
+      try{await api("DELETE","/analyses/"+d);if(currentId==d)setEditing(null);serverList=serverList.filter(a=>a.id!=d);draw();refreshList()}catch(x){alertMsg(x.message)}}}}
+$("btnHist").onclick=openHistory;
+// --- administration ---
+async function openAdmin(tmp){openDlg("Administration des comptes","<p class='note'>Chargement…</p>");let users;
+  try{users=(await api("GET","/admin/users")).users}catch(e){$("dlgBody").innerHTML=`<p class="msg err">${esc(e.message)}</p>`;return}
+  const lab={pending:"En attente",active:"Actif",disabled:"Désactivé"};
+  $("dlgBody").innerHTML=(tmp?`<p class="msg">Mot de passe provisoire de ${esc(tmp.name)} : <b class="mono">${esc(tmp.pw)}</b> — transmets-le-lui, il pourra le changer dans « Mon compte ».</p>`:"")+
+    `<div class="scroll"><table><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Statut</th><th>Analyses</th><th>Dernière connexion</th><th></th></tr></thead><tbody>`+
+    users.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role=="superadmin"?"super admin":"entraîneur"}</td><td><span class="pill ${u.status}">${lab[u.status]}</span></td><td class="mono">${u.analyses}</td><td class="mono">${u.lastLogin?esc(new Date(u.lastLogin).toLocaleDateString("fr-FR")):"—"}</td>
+      <td>${u.id==user.id?"":(u.status!="active"?`<button class="primary" data-u="${u.id}" data-s="active">${u.status=="pending"?"Valider":"Réactiver"}</button> `:`<button data-u="${u.id}" data-s="disabled">Désactiver</button> `)+`<button data-u="${u.id}" data-reset="1" data-n="${esc(u.name)}">Réinit. mot de passe</button>`}</td></tr>`).join("")+`</tbody></table></div>
+    <p class="note">Un compte désactivé est déconnecté immédiatement ; ses analyses sont conservées et restent visibles pour toi.</p>`;
+  $("dlgBody").onclick=async e=>{const b=e.target;if(!b.dataset.u)return;try{
+    if(b.dataset.reset){if(!b.dataset.confirm){b.dataset.confirm=1;b.textContent="Confirmer ?";return}const r=await api("POST","/admin/users/"+b.dataset.u,{resetPassword:true});openAdmin({name:b.dataset.n,pw:r.tempPassword})}
+    else{await api("POST","/admin/users/"+b.dataset.u,{status:b.dataset.s});openAdmin()}}catch(x){alertMsg(x.message)}}}
+$("btnAdmin").onclick=()=>openAdmin();
+// détection du serveur (en local sans serveur : mode navigateur seul)
+(async()=>{try{const r=await fetch("/api/me",{credentials:"same-origin"});if(r.status==401||r.ok){serverOK=true;setUser(r.ok?(await r.json()).user:null)}else setUser(null)}catch{setUser(null)}})();
 fillDist();$("f_dist").value=100;$("f_plan").value=PLAN[$("f_bassin").value];loadSample();renderSaved();render();
 </script>
 
