@@ -175,7 +175,7 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
 </div>
 
 <section class="panel">
-  <div class="row"><h2>Résultats</h2><div class="grow"></div><button class="primary" id="btnPdf">Rapport PDF</button><button id="cpCsv">Copier en CSV</button><button id="cpJson">Copier en JSON</button></div>
+  <div class="row"><h2>Résultats</h2><div class="grow"></div><button class="primary" id="btnPdf">Rapport PDF</button><button id="btnXlsx">Export Excel</button><button id="cpCsv">Copier en CSV</button><button id="cpJson">Copier en JSON</button></div>
   <div class="kpis" id="kpis"></div>
   <div class="scroll"><svg id="chart" width="100%" height="190" role="img" aria-label="Graphique de course"></svg></div>
   <div class="scroll" id="resWrap"></div>
@@ -188,6 +188,7 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const TYPES={
@@ -236,6 +237,8 @@ function undo(){if(locked())return;if(!marks.length)return;let li=0;marks.forEac
 function compute(){
   const T0=t0(), s=sorted(), dmap=sectionDist(), bd=boundaries(), pool=+$("f_bassin").value, D=+$("f_dist").value;
   const cyc=+$("f_cyc").value, pos=posFn(T0);
+  // 4 nages : papillon et brasse comptés en cycles, dos et crawl en coups de bras (comme les fiches Espadon PC)
+  const cycAt=d=>{if($("f_style").value!="4 nages")return cyc;return [1,0.5,1,0.5][Math.min(3,Math.floor((d-0.001)/(D/4)))]};
   const secs=s.filter(m=>m.type=="section").map(m=>({d:dmap.get(m),t:m.t-T0})).filter(x=>x.d!=null);
   const strokes=s.filter(m=>m.type=="stroke").map(m=>m.t-T0), breaths=s.filter(m=>m.type=="breath").map(m=>m.t-T0);
   const g=type=>{const m=s.find(x=>x.type==type);return m?m.t-T0:null};
@@ -244,9 +247,11 @@ function compute(){
   for(const x of secs){
     const dt=x.t-prevT, len=x.d-prevD;
     const inS=strokes.filter(t=>t>prevT&&t<=x.t);
-    const n=inS.length*cyc;
-    let freq=null,amp=null; const v=len/dt;
-    if(inS.length>=2){const span=inS[inS.length-1]-inS[0],c=(inS.length-1)*cyc;freq=60*c/span;
+    const cy=cycAt(x.d),n=inS.length*cy;
+    let freq=null,amp=null; let v=len/dt;
+    // repère 15 m après un mur : vitesse calculée depuis le mur (comme Espadon PC)
+    if(x.d>pool&&x.d%pool==15){const w=secs.find(q=>q.d==x.d-15);if(w&&x.t>w.t)v=15/(x.t-w.t)}
+    if(inS.length>=2){const span=inS[inS.length-1]-inS[0],c=(inS.length-1)*cy;freq=60*c/span;
       const pa=pos(inS[0]),pb=pos(inS[inS.length-1]);amp=pa!=null&&pb!=null&&pb>pa?(pb-pa)/c:v*60/freq}
     rows.push({from:prevD,to:x.d,t:x.t,dt,v,n,freq,tc:freq?60/freq:null,amp,br:breaths.filter(t=>t>prevT&&t<=x.t).length,wall:x.d%pool==0});
     prevT=x.t;prevD=x.d;
@@ -259,15 +264,15 @@ function compute(){
     const st=strokes.filter(t=>t>lStart&&t<=r.t), last=st.length?st[st.length-1]:null;
     const pb=b!=null?pos(b):null, pl=last!=null?pos(last):null;
     let freq=null,tempo=null,amp=null;
-    if(st.length>=2){const c=(st.length-1)*cyc;freq=60*c/(st[st.length-1]-st[0]);tempo=60/freq;const p1=pos(st[0]);if(p1!=null&&pl!=null&&pl>p1)amp=(pl-p1)/c}
+    const cy=cycAt(r.to);if(st.length>=2){const c=(st.length-1)*cy;freq=60*c/(st[st.length-1]-st[0]);tempo=60/freq;const p1=pos(st[0]);if(p1!=null&&pl!=null&&pl>p1)amp=(pl-p1)/c}
     const t15=tAt(r.to+15);
     lens.push({n:idx+1,from:dStart,to:r.to,split:r.t,lap:r.t-lStart,brk:b,coulee:b!=null?b-from:null,couleeD:pb!=null?pb-dStart:null,
-      strokes:st.length,cycles:st.length*cyc,freq,tempo,amp,br:breaths.filter(t=>t>lStart&&t<=r.t).length,
+      strokes:st.length,cycles:st.length*cy,freq,tempo,amp,br:breaths.filter(t=>t>lStart&&t<=r.t).length,
       approche:last!=null?r.t-last:null,dLast:pl!=null?r.to-pl:null,t15after:t15!=null?t15-r.t:null,isLast:r.to==D});
     lStart=r.t;dStart=r.to}
   // fréquence / amplitude / tempo par tranche de 25 m (comme les fiches Espadon PC)
   const blocks={};for(let d=25;d<=D;d+=25){const t1=tAt(d),t0=d==25?0:tAt(d-25);if(t1==null||t0==null)continue;
-    const st=strokes.filter(t=>t>t0&&t<=t1);if(st.length<2)continue;const c=(st.length-1)*cyc,fq=60*c/(st[st.length-1]-st[0]);
+    const st=strokes.filter(t=>t>t0&&t<=t1);if(st.length<2)continue;const c=(st.length-1)*cycAt(d),fq=60*c/(st[st.length-1]-st[0]);
     const p0=pos(st[0]),p1=pos(st[st.length-1]);blocks[d]={freq:fq,tempo:60/fq,amp:p0!=null&&p1!=null&&p1>p0?(p1-p0)/c:null}}
   // départ / virages / arrivée (comme la fiche Espadon PC)
   const L0=lens[0];
@@ -373,7 +378,7 @@ document.addEventListener("keydown",e=>{if(locked())return;
   else if(k=="z"||k=="backspace"){e.preventDefault();undo()}
   else if(KEYMAP[k]&&!e.metaKey&&!e.ctrlKey){e.preventDefault();addMark(KEYMAP[k])}
 });
-$("f_off").addEventListener("input",render);$("f_style").addEventListener("change",()=>{const v=$("f_style").value;$("f_cyc").value=(v=="Nage libre"||v=="Dos")?"0.5":"1";render()});$("f_sync").addEventListener("change",render);$("f_offr").addEventListener("input",()=>{if(parseT($("f_offr").value)&&$("f_sync").value=="0")$("f_sync").value="2";render()});
+$("f_off").addEventListener("input",render);$("f_style").addEventListener("change",()=>{const v=$("f_style").value;$("f_cyc").value=(v=="Nage libre"||v=="Dos")?"0.5":"1";$("f_cyc").disabled=v=="4 nages";$("f_plan").value=v=="4 nages"?PLAN1[$("f_bassin").value]:PLAN[$("f_bassin").value];render()});$("f_sync").addEventListener("change",render);$("f_offr").addEventListener("input",()=>{if(parseT($("f_offr").value)&&$("f_sync").value=="0")$("f_sync").value="2";render()});
 ["f_bassin","f_dist","f_cyc","f_fps","f_plan","f_plan1"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin"){fillDist();$("f_plan").value=PLAN[$("f_bassin").value];$("f_plan1").value=PLAN1[$("f_bassin").value]}render()}));
 window.addEventListener("resize",()=>drawChart());
 
@@ -389,7 +394,7 @@ function checkVideo(){const w=$("vidWarn");if(!w)return;const e=expectedVideo,v=
   if(e.duration&&v.duration&&Math.abs(e.duration-v.duration)>0.2)diffs.push(`durée ${fmt(v.duration)} s au lieu de ${fmt(e.duration)} s`);
   w.hidden=!diffs.length;w.textContent=diffs.length?"Attention : cette vidéo ne semble pas être celle utilisée pour cette analyse ("+diffs.join(", ")+"). Si elle a été recoupée ou réexportée, les pointages seront décalés.":""}
 const meta=()=>({video:videoInfo||expectedVideo||null,nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,rang:$("f_rank").value,officiel:$("f_off").value,sync:$("f_sync").value,reactOff:$("f_offr").value,plan:$("f_plan").value,plan1:$("f_plan1").value,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
-function applyMeta(m){expectedVideo=m.video||null;checkVideo();$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_offr").value=m.reactOff||"";$("f_plan").value=m.plan||PLAN[m.bassin||50];$("f_plan1").value=m.plan1||m.plan||PLAN1[m.bassin||50];$("f_cyc").value=m.cycle||1}
+function applyMeta(m){expectedVideo=m.video||null;checkVideo();$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_cyc").disabled=(m.nage=="4 nages");$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_offr").value=m.reactOff||"";$("f_plan").value=m.plan||PLAN[m.bassin||50];$("f_plan1").value=m.plan1||m.plan||PLAN1[m.bassin||50];$("f_cyc").value=m.cycle||1}
 function renderSaved(){const a=getSaved();$("saved").innerHTML=a.length?a.map((x,i)=>`<div class="it"><div><b>${x.meta.nageur||"Sans nom"}</b> · ${x.meta.distance} m ${x.meta.nage} · ${x.meta.tour} · <span class="note">${x.meta.competition} ${x.meta.date}</span></div><button data-load="${i}">Ouvrir</button><button class="x" data-rm="${i}" aria-label="Supprimer">×</button></div>`).join(""):`<p class="note">Rien pour l'instant. Les analyses restent dans ce navigateur. Utilise « Copier en JSON » pour les sauvegarder ailleurs.</p>`}
 $("saved").onclick=e=>{const a=getSaved();if(e.target.dataset.load!=null){const x=a[+e.target.dataset.load];applyMeta(x.meta);marks=x.marks;sample=false;$("sampleBadge").hidden=true;render()}
   if(e.target.dataset.rm!=null){if(e.target.dataset.confirm){a.splice(+e.target.dataset.rm,1);setSaved(a);renderSaved()}else{e.target.dataset.confirm=1;e.target.textContent="Confirmer ?";e.target.style.fontSize="12px"}}};
@@ -406,6 +411,28 @@ $("cpCsv").onclick=e=>{const r=compute(),m=meta(),mt=mainTable(r),tt=turnTables(
   mt.head.join(";"),...mt.rows.map(x=>x.join(";")),"",tt.depHead.join(";"),...tt.dep.map(x=>x.join(";")),"",tt.trHead.join(";"),...tt.tr.map(x=>x.join(";"))];
   copy(L.join("\n").replace(/—/g,""),e.target)};
 
+// export Excel au format « Données analyses » d'Espadon PC (mêmes lignes : 10-18 fiche, 20 passages, 180 fréquences, 260 vitesses, 410 coups de bras, 490 tempo, 570 amplitudes, 650 virages)
+function buildXlsxRows(){const r=compute(),m=meta(),A=[];const put=(row,a,b)=>{while(A.length<row)A.push([]);A[row-1]=b===undefined?[a]:[a,b]};
+  const tx=s=>{if(s==null||!isFinite(s))return"--:--:--";const mn=Math.floor(s/60),sc=s-mn*60;return String(mn).padStart(2,"0")+":"+sc.toFixed(2).padStart(5,"0")};
+  const nx=(v,d=2)=>v==null||!isFinite(v)?"-.--":+v.toFixed(d);
+  const dist=`${m.distance}m(${m.bassin}m)`,nom=`${m.nageur} - ${m.tour} ${dist} ${m.nage}`;
+  put(10,"Competition",m.competition);put(11,"Nom courbe Excel",nom);put(12,"Nageur (prénom, nom)",m.nageur);put(13,"Round",m.tour);put(14,"Distance(Bassin)",dist);put(15,"Style",m.nage);put(16,"Couloir",m.couloir);
+  put(17,"Temps réaction (s)",tx(r.react));put(18,"Temps vol (s)",tx(r.vol));
+  const rows=r.rows.filter(x=>!(x.to==5&&x.from==0));
+  put(20,"Temps passage");rows.forEach((x,i)=>put(21+i,x.to,tx(x.t)));
+  const B=Object.entries(r.blocks).map(([d,b])=>[+d,b]).sort((a,b)=>a[0]-b[0]);
+  put(180,"Fréquences (c/min)");B.forEach(([d,b],i)=>put(181+i,d,nx(b.freq)));
+  put(260,"Vitesse par section (m/s)");rows.forEach((x,i)=>put(261+i,x.to,nx(x.v)));
+  put(410,"Coups de bras");r.lens.forEach((L,i)=>put(411+i,L.to,L.strokes));
+  put(490,"Tempo");B.forEach(([d,b],i)=>put(491+i,d,nx(b.tempo)));
+  put(570,"Amplitudes");B.forEach(([d,b],i)=>put(571+i,d,nx(b.amp)));
+  put(650,"Analyse des virages");put(651,"Dep Tps coulées",tx(r.depart?.coulee));put(652,"Dep Dist coulées",nx(r.depart?.couleeD));
+  const T=r.turns.map((t,i)=>[r.lens[i].to,t]);let row=654;
+  const block=(title,fn)=>{put(row++,title);T.forEach(([d,t])=>put(row++,d,fn(t)));row++};
+  block("Tps approches",t=>tx(t.approche));block("Distances murs",t=>nx(t.dMur));block("Temps coulées",t=>tx(t.coulee));block("Distances coulées",t=>nx(t.couleeD));block("Temps total",t=>tx(t.total));
+  return A}
+$("btnXlsx").onclick=()=>{try{const ws=XLSX.utils.aoa_to_sheet(buildXlsxRows()),wb=XLSX.utils.book_new();ws["!cols"]=[{wch:24},{wch:44}];XLSX.utils.book_append_sheet(wb,ws,"Données analyses");
+  const m=meta();XLSX.writeFile(wb,`${(m.nageur||"analyse").replace(/\s+/g,"_")}_${m.distance}_${m.nage.replace(/\s+/g,"")}_${m.tour}.xlsx`)}catch(e){$("btnXlsx").textContent="Excel indisponible";console.error(e)}};
 // rapport PDF
 function buildPdf(){
   const {jsPDF}=window.jspdf, doc=new jsPDF({unit:"mm",format:"a4"}), r=compute(), m=meta();
