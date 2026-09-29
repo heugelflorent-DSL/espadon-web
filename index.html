@@ -130,7 +130,8 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
     <label>Temps officiel<input id="f_off" placeholder="ex. 52,31 ou 1:02,45" inputmode="decimal"></label>
     <label>Réaction officielle<input id="f_offr" placeholder="ex. 0,68" inputmode="decimal"></label>
     <label>Caler le départ<select id="f_sync"><option value="0">Sur le signal S</option><option value="1">Sur le temps officiel</option><option value="2">Sur la réaction officielle (D)</option></select></label>
-    <label>Repères par longueur (m)<input id="f_plan" placeholder="ex. 5,15,25,35,45,50"></label>
+    <label>Repères 1re longueur (m)<input id="f_plan1" placeholder="ex. 5,15,25,45,50"></label>
+    <label>Repères longueurs suivantes (m)<input id="f_plan" placeholder="ex. 5,25,45,50"></label>
     <label>Images / s<input id="f_fps" type="number" min="1" max="240" value="25"></label>
     <label>Appui « C » =<select id="f_cyc"><option value="0.5">1 bras (½ cycle)</option><option value="1">1 cycle</option></select></label>
   </div>
@@ -158,6 +159,7 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
       <button id="bFwd10" title="Maj + →">10 img ⏭</button>
       <select id="rate" aria-label="Vitesse de lecture"><option value="0.1">×0,1</option><option value="0.25">×0,25</option><option value="0.5">×0,5</option><option value="1" selected>×1</option></select>
     </div>
+    <p class="msg err" id="vidWarn" hidden></p>
     <div class="strip" id="strip" title="Clique pour te déplacer"></div>
     <div class="keys" id="keys"></div>
     <p class="note">Les sections sont affectées dans l'ordre : chaque appui sur <kbd>X</kbd> valide le prochain repère affiché en jaune. Le dernier repère de chaque longueur donne le temps de passage. <kbd>Z</kbd> annule le dernier pointage.</p>
@@ -175,7 +177,7 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
 <section class="panel">
   <div class="row"><h2>Résultats</h2><div class="grow"></div><button class="primary" id="btnPdf">Rapport PDF</button><button id="cpCsv">Copier en CSV</button><button id="cpJson">Copier en JSON</button></div>
   <div class="kpis" id="kpis"></div>
-  <div class="scroll"><svg id="chart" width="100%" height="190" role="img" aria-label="Vitesse par section"></svg></div>
+  <div class="scroll"><svg id="chart" width="100%" height="190" role="img" aria-label="Graphique de course"></svg></div>
   <div class="scroll" id="resWrap"></div>
   <h2>Départ, virages et arrivée</h2>
   <div class="scroll" id="turnWrap"></div>
@@ -199,7 +201,7 @@ const TYPES={
 };
 const KEYMAP={}; for(const t in TYPES) KEYMAP[TYPES[t].k.toLowerCase()]=t;
 const CFG={25:[5,10,5,5],50:[5,10,10,10,10,5]};
-const PLAN={25:"5,15,20,25",50:"5,15,25,35,45,50"}; // découpage des sections par longueur (comme les fiches Espadon PC)
+const PLAN={25:"5,15,20,25",50:"5,25,45,50"},PLAN1={25:"5,15,20,25",50:"5,15,25,45,50"}; // découpage des sections par longueur (comme les fiches Espadon PC)
 const DISTS={50:[50,100,200,400,800,1500],25:[50,100,200,400,800,1500]};
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const fmt=(x,d=2)=>x==null||!isFinite(x)?"—":x.toFixed(d).replace(".",",");
@@ -209,9 +211,9 @@ const fmtT=s=>{if(s==null||!isFinite(s))return"—";const m=Math.floor(s/60),r=s
 let marks=[], sample=true, vid=$("vid"), hasVideo=false, duration=60;
 
 function fillDist(){const b=$("f_bassin").value,cur=+$("f_dist").value||100;$("f_dist").innerHTML=DISTS[b].map(d=>`<option value="${d}" ${d==cur?"selected":""}>${d} m</option>`).join("")}
-function plan(){const b=+$("f_bassin").value;let p=String($("f_plan").value||PLAN[b]).split(/[;,\s]+/).map(x=>+x.replace(",", ".")).filter(x=>x>0&&x<=b);
+function plan(first){const b=+$("f_bassin").value;let p=String(first?($("f_plan1").value||PLAN1[b]):($("f_plan").value||PLAN[b])).split(/[;,\s]+/).map(x=>+x.replace(",", ".")).filter(x=>x>0&&x<=b);
   p=[...new Set(p)].sort((a,c)=>a-c);if(p[p.length-1]!==b)p.push(b);return p}
-function boundaries(){const b=+$("f_bassin").value,D=+$("f_dist").value,out=[];for(let s=0;s<D;s+=b)for(const o of plan())out.push(s+o);return out}
+function boundaries(){const b=+$("f_bassin").value,D=+$("f_dist").value,out=[];for(let s=0;s<D;s+=b)for(const o of plan(s==0))out.push(s+o);return out}
 function t0(){if($("f_sync").value=="2"){const r=parseT($("f_offr").value),d=marks.find(m=>m.type=="react");if(r&&d)return d.t-r}
   if($("f_sync").value=="1"){const off=parseT($("f_off").value),bd=boundaries(),sc=sorted().filter(m=>m.type=="section");if(off&&sc.length>=bd.length)return sc[bd.length-1].t-off}
   const s=marks.find(m=>m.type=="start");return s?s.t:0}
@@ -263,6 +265,10 @@ function compute(){
       strokes:st.length,cycles:st.length*cyc,freq,tempo,amp,br:breaths.filter(t=>t>lStart&&t<=r.t).length,
       approche:last!=null?r.t-last:null,dLast:pl!=null?r.to-pl:null,t15after:t15!=null?t15-r.t:null,isLast:r.to==D});
     lStart=r.t;dStart=r.to}
+  // fréquence / amplitude / tempo par tranche de 25 m (comme les fiches Espadon PC)
+  const blocks={};for(let d=25;d<=D;d+=25){const t1=tAt(d),t0=d==25?0:tAt(d-25);if(t1==null||t0==null)continue;
+    const st=strokes.filter(t=>t>t0&&t<=t1);if(st.length<2)continue;const c=(st.length-1)*cyc,fq=60*c/(st[st.length-1]-st[0]);
+    const p0=pos(st[0]),p1=pos(st[st.length-1]);blocks[d]={freq:fq,tempo:60/fq,amp:p0!=null&&p1!=null&&p1>p0?(p1-p0)/c:null}}
   // départ / virages / arrivée (comme la fiche Espadon PC)
   const L0=lens[0];
   const depart=L0?{react,vol:(reactP??react)!=null&&entry!=null?entry-(reactP??react):null,coulee:L0.coulee,couleeD:L0.couleeD,tDepart:L0.brk!=null?L0.brk:null,t15:tAt(15)}:null;
@@ -277,7 +283,7 @@ function compute(){
   const allF=rows.filter(r=>r.freq).map(r=>r.freq);
   const freq=allF.length?allF.reduce((a,b)=>a+b)/allF.length:null;
   const strokePos=new Map(strokes.map(t=>[t,pos(t)]));
-  return {rows,lens,depart,turns,totals,react,reactP,offR,vol:(reactP??react)!=null&&entry!=null?entry-(reactP??react):null,entry,t15:r15?r15.t:null,final,pos,T0,
+  return {blocks,rows,lens,depart,turns,totals,react,reactP,offR,vol:(reactP??react)!=null&&entry!=null?entry-(reactP??react):null,entry,t15:r15?r15.t:null,final,pos,T0,
     off:parseT($("f_off").value),sync:syncInfo(),freq,tc:freq?60/freq:null,remaining:bd.length-secs.length};
 }
 
@@ -285,7 +291,7 @@ function compute(){
 function mainTable(r){const head=["Distance","Temps cumulé","Temps longueur","Vit. section","Fréquence","Amplitude","Tempo","Coups de bras","Respirations"];
   const rows=[],lap=[];let li=0;
   for(const x of r.rows){const L=x.wall?r.lens[li++]:null;
-    rows.push([x.to+" m",fmtT(x.t),L?fmtT(L.lap):"",fmt(x.v),L?fmt(L.freq,1):"",L?fmt(L.amp):"",L?fmt(L.tempo):"",L?String(L.strokes):"",x.br?String(x.br):""]);lap.push(!!L)}
+    const B=r.blocks[x.to];rows.push([x.to+" m",fmtT(x.t),L?fmtT(L.lap):"",fmt(x.v),B?fmt(B.freq,1):"",B?fmt(B.amp):"",B?fmt(B.tempo):"",L?String(L.strokes):"",x.br?String(x.br):""]);lap.push(!!L)}
   return{head,rows,lap}}
 function turnTables(r){const f2=x=>x==null?"—":fmtT(x),d=x=>fmt(x);
   const dep=r.depart?[["Départ",f2(r.depart.react),f2(r.depart.vol),f2(r.depart.coulee),d(r.depart.couleeD),f2(r.depart.tDepart),f2(r.depart.t15)]]:[];
@@ -315,21 +321,23 @@ function render(){
   $("resWrap").innerHTML=mt.rows.length?htmlTable(mt.head,mt.rows,mt.lap):`<p class="note">Les résultats apparaissent dès le premier passage de section.</p>`;
   const tt=turnTables(r);
   $("turnWrap").innerHTML=tt.dep.length?htmlTable(tt.depHead,tt.dep)+'<div style="height:8px"></div>'+htmlTable(tt.trHead,tt.tr):`<p class="note">Apparaît dès le premier passage au mur.</p>`;
-  drawChart(r.rows);
+  drawChart();
 }
 
-function drawChart(rows){
-  const svg=$("chart"),W=Math.max(svg.clientWidth,320),H=190,pl=42,pr=10,pt=12,pb=28;
-  if(!rows.length){svg.innerHTML=`<text x="${pl}" y="100">Vitesse par section (m/s)</text>`;return}
-  const vmax=Math.ceil(Math.max(...rows.map(r=>r.v))*2)/2, vmin=Math.max(0,Math.floor(Math.min(...rows.map(r=>r.v))*2)/2-0.5);
-  const y=v=>pt+(H-pt-pb)*(1-(v-vmin)/(vmax-vmin)), bw=(W-pl-pr)/rows.length;
-  let s="";for(let v=vmin;v<=vmax+1e-6;v+=0.5)s+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="${css("--line")}"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end">${fmt(v,1)}</text>`;
-  rows.forEach((r,i)=>{const x=pl+i*bw+2,h=H-pb-y(r.v);
-    s+=`<rect x="${x}" y="${y(r.v)}" width="${Math.max(bw-4,2)}" height="${h}" rx="2" fill="${css(r.from%(+$("f_bassin").value)==0?"--c-break":"--water")}" opacity=".85"><title>${r.from}–${r.to} m : ${fmt(r.v)} m/s</title></rect>`;
-    if(rows.length<=24||i%2==0)s+=`<text x="${x+bw/2-2}" y="${H-10}" text-anchor="middle">${r.to}</text>`});
-  s+=`<text x="${pl}" y="${H-0}">m</text>`;
-  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.innerHTML=s;
-}
+// graphique de course (comme les fiches Espadon PC) : vitesse et amplitude (axe gauche), fréquence et coups de bras (axe droit)
+function chartModel(r){const D=+$("f_dist").value;
+  const sp=r.rows.map(x=>[x.to,x.v]),fr=[],am=[];Object.entries(r.blocks).forEach(([d,b])=>{fr.push([+d,b.freq]);if(b.amp!=null)am.push([+d,b.amp])});
+  const cb=r.lens.filter(L=>L.strokes).map(L=>[L.to,L.strokes]);
+  const lmax=Math.max(3,Math.ceil(Math.max(0,...sp.map(p=>p[1]),...am.map(p=>p[1]))+0.5)),rmax=Math.max(30,Math.ceil(Math.max(0,...fr.map(p=>p[1]),...cb.map(p=>p[1]))/10)*10+10);
+  return{D,lmax,rmax,series:[{name:"Vitesse par section (m/s)",c:"--c-start",rgb:[122,18,18],pts:sp,ax:"l"},{name:"Fréquence (c/min)",c:"--c-break",rgb:[46,140,60],pts:fr,ax:"r"},{name:"Coups de bras",c:"--water",rgb:[74,110,170],pts:cb,ax:"r"},{name:"Amplitude (m/c)",c:"--c-breath",rgb:[235,160,60],pts:am,ax:"l"}]}}
+function drawChart(){const svg=$("chart"),r=compute(),M=chartModel(r),W=Math.max(svg.clientWidth,320),H=230,pl=34,pr=34,pt=12,pb=44;
+  if(!r.rows.length){svg.innerHTML=`<text x="${pl}" y="100">Graphique de course</text>`;return}
+  const X=d=>pl+(W-pl-pr)*d/M.D,YL=v=>pt+(H-pt-pb)*(1-v/M.lmax),YR=v=>pt+(H-pt-pb)*(1-v/M.rmax);let s="";
+  for(let k=0;k<=5;k++){const y=pt+(H-pt-pb)*k/5;s+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="${css("--line")}"/><text x="${pl-4}" y="${y+4}" text-anchor="end">${fmt(M.lmax*(1-k/5),1)}</text><text x="${W-pr+4}" y="${y+4}">${Math.round(M.rmax*(1-k/5))}</text>`}
+  const step=M.D<=100?10:M.D<=400?50:100;for(let d=0;d<=M.D;d+=step)s+=`<text x="${X(d)}" y="${H-pb+14}" text-anchor="middle">${d}</text>`;
+  M.series.forEach(se=>{if(se.pts.length<1)return;const Y=se.ax=="l"?YL:YR;s+=`<polyline fill="none" stroke="${css(se.c)}" stroke-width="2" points="${se.pts.map(p=>X(p[0])+","+Y(p[1])).join(" ")}"/>`+se.pts.map(p=>`<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="2.5" fill="${css(se.c)}"><title>${p[0]} m : ${fmt(p[1],se.name.startsWith("Coups")?0:2)}</title></circle>`).join("")});
+  let lx=pl;M.series.forEach(se=>{s+=`<rect x="${lx}" y="${H-14}" width="12" height="3" fill="${css(se.c)}"/><text x="${lx+16}" y="${H-10}">${se.name}</text>`;lx+=16+se.name.length*6.2+14});
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("height",H);svg.innerHTML=s}
 
 function updateTime(){const t=hasVideo?vid.currentTime:0;const rel=t-t0();
   $("tc").innerHTML=`${marks.some(m=>m.type=="start")?fmtT(rel):fmtT(t)} s <small>${marks.some(m=>m.type=="start")?"depuis le départ":"temps vidéo"}</small>`;
@@ -337,13 +345,13 @@ function updateTime(){const t=hasVideo?vid.currentTime:0;const rel=t-t0();
   const c=$("cur");if(c)c.style.left=(t/duration*100)+"%"}
 
 // video
-function loadFile(f){if(locked())return;if(!f||!f.type.startsWith("video"))return;vid.src=URL.createObjectURL(f);vid.hidden=false;$("drop").hidden=true;hasVideo=true;
+function loadFile(f){if(locked())return;videoInfo={name:f.name,size:f.size,duration:null};if(!f||!f.type.startsWith("video"))return;vid.src=URL.createObjectURL(f);vid.hidden=false;$("drop").hidden=true;hasVideo=true;
   if(sample){marks=[];sample=false;$("sampleBadge").hidden=true}render()}
 $("file").onchange=e=>loadFile(e.target.files[0]);
 const st=$("stage");st.addEventListener("dragover",e=>{e.preventDefault();$("drop").classList.add("over")});
 st.addEventListener("dragleave",()=>$("drop").classList.remove("over"));
 st.addEventListener("drop",e=>{e.preventDefault();$("drop").classList.remove("over");loadFile(e.dataTransfer.files[0])});
-vid.addEventListener("timeupdate",updateTime);vid.addEventListener("seeked",updateTime);vid.addEventListener("loadedmetadata",render);
+vid.addEventListener("timeupdate",updateTime);vid.addEventListener("seeked",updateTime);vid.addEventListener("loadedmetadata",render);vid.addEventListener("loadedmetadata",()=>{if(videoInfo){videoInfo.duration=+vid.duration.toFixed(2);checkVideo()}});
 vid.addEventListener("play",()=>$("bPlay").textContent="Pause");vid.addEventListener("pause",()=>$("bPlay").textContent="Lecture");
 const step=n=>{if(!hasVideo)return;vid.pause();vid.currentTime=Math.max(0,vid.currentTime+n/(+$("f_fps").value))};
 const toggle=()=>{if(hasVideo)vid.paused?vid.play():vid.pause()};
@@ -366,15 +374,22 @@ document.addEventListener("keydown",e=>{if(locked())return;
   else if(KEYMAP[k]&&!e.metaKey&&!e.ctrlKey){e.preventDefault();addMark(KEYMAP[k])}
 });
 $("f_off").addEventListener("input",render);$("f_style").addEventListener("change",()=>{const v=$("f_style").value;$("f_cyc").value=(v=="Nage libre"||v=="Dos")?"0.5":"1";render()});$("f_sync").addEventListener("change",render);$("f_offr").addEventListener("input",()=>{if(parseT($("f_offr").value)&&$("f_sync").value=="0")$("f_sync").value="2";render()});
-["f_bassin","f_dist","f_cyc","f_fps","f_plan"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin"){fillDist();$("f_plan").value=PLAN[$("f_bassin").value]}render()}));
-window.addEventListener("resize",()=>drawChart(compute().rows));
+["f_bassin","f_dist","f_cyc","f_fps","f_plan","f_plan1"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin"){fillDist();$("f_plan").value=PLAN[$("f_bassin").value];$("f_plan1").value=PLAN1[$("f_bassin").value]}render()}));
+window.addEventListener("resize",()=>drawChart());
 
 // save / load
 const LS="espadon-web-analyses";
 const getSaved=()=>{try{return JSON.parse(localStorage.getItem(LS))||[]}catch{return[]}};
 const setSaved=a=>{try{localStorage.setItem(LS,JSON.stringify(a));return true}catch{return false}};
-const meta=()=>({nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,rang:$("f_rank").value,officiel:$("f_off").value,sync:$("f_sync").value,reactOff:$("f_offr").value,plan:$("f_plan").value,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
-function applyMeta(m){$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_offr").value=m.reactOff||"";$("f_plan").value=m.plan||PLAN[m.bassin||50];$("f_cyc").value=m.cycle||1}
+// vidéo utilisée pour l'analyse : nom, taille, durée (contrôle quand on rouvre une analyse)
+let videoInfo=null,expectedVideo=null;
+function checkVideo(){const w=$("vidWarn");if(!w)return;const e=expectedVideo,v=videoInfo;if(!e||!v){w.hidden=true;return}
+  const diffs=[];if(e.name&&v.name&&e.name!==v.name)diffs.push(`nom « ${v.name} » au lieu de « ${e.name} »`);
+  if(e.size&&v.size&&e.size!==v.size)diffs.push(`taille ${fmt(v.size/1048576,1)} Mo au lieu de ${fmt(e.size/1048576,1)} Mo`);
+  if(e.duration&&v.duration&&Math.abs(e.duration-v.duration)>0.2)diffs.push(`durée ${fmt(v.duration)} s au lieu de ${fmt(e.duration)} s`);
+  w.hidden=!diffs.length;w.textContent=diffs.length?"Attention : cette vidéo ne semble pas être celle utilisée pour cette analyse ("+diffs.join(", ")+"). Si elle a été recoupée ou réexportée, les pointages seront décalés.":""}
+const meta=()=>({video:videoInfo||expectedVideo||null,nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,rang:$("f_rank").value,officiel:$("f_off").value,sync:$("f_sync").value,reactOff:$("f_offr").value,plan:$("f_plan").value,plan1:$("f_plan1").value,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
+function applyMeta(m){expectedVideo=m.video||null;checkVideo();$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_offr").value=m.reactOff||"";$("f_plan").value=m.plan||PLAN[m.bassin||50];$("f_plan1").value=m.plan1||m.plan||PLAN1[m.bassin||50];$("f_cyc").value=m.cycle||1}
 function renderSaved(){const a=getSaved();$("saved").innerHTML=a.length?a.map((x,i)=>`<div class="it"><div><b>${x.meta.nageur||"Sans nom"}</b> · ${x.meta.distance} m ${x.meta.nage} · ${x.meta.tour} · <span class="note">${x.meta.competition} ${x.meta.date}</span></div><button data-load="${i}">Ouvrir</button><button class="x" data-rm="${i}" aria-label="Supprimer">×</button></div>`).join(""):`<p class="note">Rien pour l'instant. Les analyses restent dans ce navigateur. Utilise « Copier en JSON » pour les sauvegarder ailleurs.</p>`}
 $("saved").onclick=e=>{const a=getSaved();if(e.target.dataset.load!=null){const x=a[+e.target.dataset.load];applyMeta(x.meta);marks=x.marks;sample=false;$("sampleBadge").hidden=true;render()}
   if(e.target.dataset.rm!=null){if(e.target.dataset.confirm){a.splice(+e.target.dataset.rm,1);setSaved(a);renderSaved()}else{e.target.dataset.confirm=1;e.target.textContent="Confirmer ?";e.target.style.fontSize="12px"}}};
@@ -417,18 +432,14 @@ function buildPdf(){
     doc.setTextColor(...INK);doc.setFont("courier","bold");doc.setFontSize(13);doc.text(b,x+4,73);
     doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(...MUT);doc.text(a.toUpperCase(),x+4,79)});
   // graphique vitesse
-  let y=92;doc.setTextColor(...INK);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("VITESSE PAR SECTION (m/s)",14,y);
-  const rows=r.rows;if(rows.length){
-    const cx=24,cw=W-14-cx,cy=y+5,ch=45,vmax=Math.ceil(Math.max(...rows.map(x=>x.v))*2)/2,vmin=Math.max(0,Math.floor(Math.min(...rows.map(x=>x.v))*2)/2-.5);
-    const Y=v=>cy+ch*(1-(v-vmin)/(vmax-vmin));doc.setFont("courier","normal");doc.setFontSize(7);
-    for(let v=vmin;v<=vmax+1e-6;v+=.5){doc.setDrawColor(207,221,227);doc.line(cx,Y(v),cx+cw,Y(v));doc.setTextColor(...MUT);doc.text(f(v,1),cx-2,Y(v)+1,{align:"right"})}
-    const bw=cw/rows.length;rows.forEach((x,i)=>{doc.setFillColor(...(x.from%m.bassin==0?GREEN:BLUE));doc.rect(cx+i*bw+1,Y(x.v),bw-2,cy+ch-Y(x.v),"F");
-      doc.setTextColor(...MUT);doc.text(String(x.to),cx+i*bw+bw/2,cy+ch+4,{align:"center"});
-      doc.setTextColor(...INK);doc.text(f(x.v),cx+i*bw+bw/2,Y(x.v)-1.2,{align:"center"})});
-    doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(...MUT);
-    doc.setFillColor(...GREEN);doc.rect(W-80,y-2.5,3,3,"F");doc.text("Sortie de mur / départ",W-76,y);
-    doc.setFillColor(...BLUE);doc.rect(W-45,y-2.5,3,3,"F");doc.text("Nage",W-41,y);
-    y=cy+ch+10}
+  let y=92;doc.setTextColor(...INK);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("GRAPHIQUE DE COURSE",14,y);
+  if(r.rows.length){const M=chartModel(r),cx=22,cw=W-14-cx-8,cy=y+4,ch=55;
+    const X=d=>cx+cw*d/M.D,YL=v=>cy+ch*(1-v/M.lmax),YR=v=>cy+ch*(1-v/M.rmax);doc.setFont("courier","normal");doc.setFontSize(6.5);doc.setLineWidth(.2);
+    for(let k=0;k<=5;k++){const yy=cy+ch*k/5;doc.setDrawColor(207,221,227);doc.line(cx,yy,cx+cw,yy);doc.setTextColor(...MUT);doc.text(f(M.lmax*(1-k/5),1),cx-1.5,yy+1,{align:"right"});doc.text(String(Math.round(M.rmax*(1-k/5))),cx+cw+1.5,yy+1)}
+    const step=M.D<=100?10:M.D<=400?50:100;for(let d=0;d<=M.D;d+=step)doc.text(String(d),X(d),cy+ch+4,{align:"center"});
+    doc.setLineWidth(.6);M.series.forEach(se=>{const Y=se.ax=="l"?YL:YR;doc.setDrawColor(...se.rgb);for(let k=1;k<se.pts.length;k++)doc.line(X(se.pts[k-1][0]),Y(se.pts[k-1][1]),X(se.pts[k][0]),Y(se.pts[k][1]))});
+    doc.setLineWidth(.2);doc.setFont("helvetica","normal");doc.setFontSize(7);let lx=cx;M.series.forEach(se=>{doc.setFillColor(...se.rgb);doc.rect(lx,cy+ch+7,5,1.2,"F");doc.setTextColor(...MUT);doc.text(se.name,lx+6.5,cy+ch+8.2);lx+=8+doc.getTextWidth(se.name)+5});
+    y=cy+ch+14}
   // tableaux
   const head={fillColor:INK,textColor:255,fontStyle:"bold",fontSize:7.5,halign:"right"};
   const st={font:"helvetica",fontSize:8,cellPadding:1.3,halign:"right",textColor:INK,lineColor:[207,221,227],lineWidth:{bottom:.2}};
@@ -451,7 +462,7 @@ $("btnPdf").onclick=()=>{const m=meta();const name=`${(m.nageur||"analyse").repl
 // exemple : 100 m NL bassin 50 m
 function loadSample(){
   const T=2;marks=[{type:"start",t:T},{type:"react",t:T+.66},{type:"entry",t:T+1.02}];
-  const secT=[1.95,6.35,11.28,16.42,21.65,24.38,26.9,31.72,37.12,42.63,48.28,51.12];
+  const secT=[1.95,6.35,11.28,21.65,24.38,26.9,37.12,48.28,51.12];
   secT.forEach(t=>marks.push({type:"section",t:+(T+t).toFixed(2)}));
   marks.push({type:"brk",t:T+5.3},{type:"brk",t:T+24.38+4.4});
   const addStrokes=(a,b,p)=>{let n=0;for(let t=a;t<b;t+=p){marks.push({type:"stroke",t:+(T+t).toFixed(2)});if(n++%6==5)marks.push({type:"breath",t:+(T+t+.2).toFixed(2)})}};
@@ -484,7 +495,7 @@ const saveLocal=$("btnSave").onclick;
 $("btnSave").onclick=async()=>{if(locked())return authDialog();if(!user)return saveLocal();const b=$("btnSave");b.disabled=true;b.textContent="Enregistrement…";
   try{const r=await api("POST","/analyses"+(currentId?"/"+currentId:""),{meta:meta(),marks,summary:summaryOf()});const m=meta();setEditing(r.analysis.id,`${m.nageur} ${m.distance} m`);b.textContent="Enregistré";refreshList()}
   catch(e){b.textContent="Échec";alertMsg(e.status==401?"Session expirée, reconnecte-toi.":e.message)}finally{b.disabled=false;setTimeout(()=>b.textContent="Enregistrer",1500)}};
-const newAnalysis=$("btnNew").onclick;$("btnNew").onclick=()=>{if(locked())return authDialog();setEditing(null);newAnalysis()};
+const newAnalysis=$("btnNew").onclick;$("btnNew").onclick=()=>{if(locked())return authDialog();setEditing(null);expectedVideo=null;checkVideo();newAnalysis()};
 $("saved").addEventListener("click",e=>{const id=e.target.dataset.open;if(id)openAnalysis(id)});
 // --- connexion / inscription ---
 function authDialog(mode="login",note=""){
@@ -541,7 +552,7 @@ async function openAdmin(tmp){openDlg("Administration des comptes","<p class='no
 $("btnAdmin").onclick=()=>openAdmin();
 // détection du serveur (en local sans serveur : mode navigateur seul)
 (async()=>{try{const r=await fetch("/api/me",{credentials:"same-origin"});if(r.status==401||r.ok){serverOK=true;setUser(r.ok?(await r.json()).user:null)}else setUser(null)}catch{setUser(null)}})();
-fillDist();$("f_dist").value=100;$("f_plan").value=PLAN[$("f_bassin").value];loadSample();renderSaved();render();
+fillDist();$("f_dist").value=100;$("f_plan").value=PLAN[$("f_bassin").value];$("f_plan1").value=PLAN1[$("f_bassin").value];loadSample();renderSaved();render();
 </script>
 
 </body></html>
