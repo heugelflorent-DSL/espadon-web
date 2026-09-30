@@ -322,7 +322,7 @@ function compute(){
 }
 
 // tableaux partagés écran / PDF / CSV
-function mainTable(r){const head=["Distance","Temps cumulé","Temps longueur","Vit. section","Fréquence","Amplitude","Tempo","Coups de bras","Respirations"];
+function mainTable(r){const head=["Distance","Temps cumulé (s)","Temps longueur (s)","Vitesse section (m/s)","Fréquence (cycles/min)","Amplitude (m/cycle)","Tempo (s/cycle)","Coups de bras (nb)","Respirations (nb)"];
   const rows=[],lap=[];let li=0;
   for(const x of r.rows){const L=x.wall?r.lens[li++]:null;
     const B=r.blocks[x.to];rows.push([x.to+" m",fmtT(x.t),L?fmtT(L.lap):"",fmt(x.v),B?fmt(B.freq,1):"",B?fmt(B.amp):"",B?fmt(B.tempo):"",L?String(L.strokes):"",x.br?String(x.br):""]);lap.push(!!L)}
@@ -331,8 +331,8 @@ function turnTables(r){const f2=x=>x==null?"—":fmtT(x),d=x=>fmt(x);
   const dep=r.depart?[["Départ",f2(r.depart.react),f2(r.depart.vol),f2(r.depart.coulee),d(r.depart.couleeD),f2(r.depart.tDepart),f2(r.depart.t15)]]:[];
   const tr=r.turns.map(t=>[t.label,f2(t.approche),d(t.dMur),f2(t.coulee),d(t.couleeD),f2(t.total),f2(t.t15)]);
   if(tr.length)tr.push(["Total",f2(r.totals.approche),d(r.totals.dMur),f2(r.totals.coulee),d(r.totals.couleeD),f2(r.totals.total),""]);
-  return{depHead:["","Tps réaction","Tps de vol","Tps coulée","Dist. coulée","Tps départ","Tps au 15 m"],dep,
-    trHead:["","Tps approche","Distance mur","Tps coulée","Dist. coulée","Tps total","Tps au 15 m"],tr}}
+  return{depHead:["","Tps réaction (s)","Tps de vol (s)","Tps coulée (s)","Dist. coulée (m)","Tps départ (s)","Tps au 15 m (s)"],dep,
+    trHead:["","Tps approche (s)","Distance mur (m)","Tps coulée (s)","Dist. coulée (m)","Tps total (s)","Tps au 15 m (s)"],tr}}
 const htmlTable=(head,rows,cls=[])=>`<table><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((r,i)=>`<tr${cls[i]?' class="len"':""}>${r.map((c,j)=>`<td${j?' class="mono"':""}>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
 function render(){
   // marks table
