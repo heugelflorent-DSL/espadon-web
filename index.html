@@ -152,6 +152,7 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
     <label>Caler le départ<select id="f_sync"><option value="0">Sur le signal S</option><option value="1">Sur le temps officiel</option><option value="2">Sur la réaction officielle (D)</option></select></label>
     <label>Repères 1re longueur (m)<input id="f_plan1" placeholder="ex. 5,15,25,45,50"></label>
     <label>Repères longueurs suivantes (m)<input id="f_plan" placeholder="ex. 5,25,45,50"></label>
+    <label title="Ajoute un repère à 35 m sur chaque longueur (bassin de 50 m) pour couper 25-45 m en deux sections">Repère 35 m (détail)<span style="display:flex;align-items:center;gap:8px;min-height:36px"><input id="f_35" type="checkbox" style="width:auto;min-height:0"> <span class="note">bassin de 50 m</span></span></label>
     <label>Images / s<input id="f_fps" type="number" min="1" max="240" value="25"></label>
     <label>Appui « C » =<select id="f_cyc"><option value="0.5">1 bras (½ cycle)</option><option value="1">1 cycle</option></select></label>
   </div>
@@ -204,7 +205,7 @@ svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
   <div class="scroll" id="resWrap"></div>
   <h2>Départ, virages et arrivée</h2>
   <div class="scroll" id="turnWrap"></div>
-  <p class="note">Fréquence (cycles/min), amplitude (m/cycle), tempo (s/cycle) et coups de bras sont donnés par longueur. Coulée de départ : de l'entrée dans l'eau à la fin de coulée ; tps départ : du signal à la fin de coulée. Virage : approche (dernier coup de bras → mur) + coulée (mur → fin de coulée) = tps total ; tps au 15 m : du mur au repère 15 m après. Les distances sont estimées par interpolation entre les repères de section.</p>
+  <p class="note">Fréquence (cycles/min), tempo (s/cycle) et amplitude (m/cycle) sont calculés sur chaque section qui contient au moins 2 coups de bras ; les coups de bras sont comptés par longueur. Le graphique montre la fréquence cycle par cycle (lissée sur 3 cycles) et l'amplitude par section. L'export Excel garde les valeurs par 25 m du format Espadon PC. Coulée de départ : de l'entrée dans l'eau à la fin de coulée ; tps départ : du signal à la fin de coulée. Virage : approche (dernier coup de bras → mur) + coulée (mur → fin de coulée) = tps total ; tps au 15 m : du mur au repère 15 m après. Les distances sont estimées par interpolation entre les repères de section.</p>
   <textarea id="out" hidden readonly aria-label="Export"></textarea>
 </section>
 </div>
@@ -237,7 +238,7 @@ const fmtT=s=>{if(s==null||!isFinite(s))return"—";if(Math.round(s*100)<0)retur
 let marks=[], sample=true, vid=$("vid"), hasVideo=false, duration=60;
 
 function fillDist(){const b=$("f_bassin").value,cur=+$("f_dist").value||100;$("f_dist").innerHTML=DISTS[b].map(d=>`<option value="${d}" ${d==cur?"selected":""}>${d} m</option>`).join("")}
-function plan(first){const b=+$("f_bassin").value;let p=String(first?($("f_plan1").value||PLAN1[b]):($("f_plan").value||PLAN[b])).split(/[;,\s]+/).map(x=>+x.replace(",", ".")).filter(x=>x>0&&x<=b);
+function plan(first){const b=+$("f_bassin").value;let p=String(first?($("f_plan1").value||PLAN1[b]):($("f_plan").value||PLAN[b])).split(/[;,\s]+/).map(x=>+x.replace(",", ".")).filter(x=>x>0&&x<=b);if(b==50&&$("f_35").checked&&!p.includes(35))p.push(35);
   p=[...new Set(p)].sort((a,c)=>a-c);if(p[p.length-1]!==b)p.push(b);return p}
 function boundaries(){const b=+$("f_bassin").value,D=+$("f_dist").value,out=[];for(let s=0;s<D;s+=b)for(const o of plan(s==0))out.push(s+o);return out}
 function t0(){if($("f_sync").value=="2"){const r=parseT($("f_offr").value),d=marks.find(m=>m.type=="react");if(r&&d)return d.t-r}
@@ -317,7 +318,11 @@ function compute(){
   const allF=rows.filter(r=>r.freq).map(r=>r.freq);
   const freq=allF.length?allF.reduce((a,b)=>a+b)/allF.length:null;
   const strokePos=new Map(strokes.map(t=>[t,pos(t)]));
-  return {blocks,rows,lens,depart,turns,totals,react,reactP,offR,vol:(reactP??react)!=null&&entry!=null?entry-(reactP??react):null,entry,t15:r15?r15.t:null,final,pos,T0,
+  // fréquence cycle par cycle (NL/dos : 2 coups de bras = 1 cycle ; pap/brasse : 1 appui = 1 cycle), lissée sur 3 cycles
+  const cycRaw=[];for(let i=0;i<strokes.length;i++){const p1=strokePos.get(strokes[i]);if(p1==null)continue;const k=cycAt(p1)==0.5?2:1;if(i<k)continue;
+    const p0=strokePos.get(strokes[i-k]),dt=strokes[i]-strokes[i-k];if(p0==null||dt<=0||dt>3||Math.floor(p0/pool)!=Math.floor(Math.min(p1,D-0.001)/pool))continue;cycRaw.push([p1,60/dt])}
+  const cycles=cycRaw.map((c,i)=>{const w=cycRaw.slice(Math.max(0,i-1),i+2).filter(q=>Math.floor(q[0]/pool)==Math.floor(c[0]/pool));return[c[0],w.reduce((a,q)=>a+q[1],0)/w.length]});
+  return {cycles,blocks,rows,lens,depart,turns,totals,react,reactP,offR,vol:(reactP??react)!=null&&entry!=null?entry-(reactP??react):null,entry,t15:r15?r15.t:null,final,pos,T0,
     off:parseT($("f_off").value),sync:syncInfo(),freq,tc:freq?60/freq:null,remaining:bd.length-secs.length};
 }
 
@@ -325,7 +330,7 @@ function compute(){
 function mainTable(r){const head=["Distance","Temps cumulé (s)","Temps longueur (s)","Vitesse section (m/s)","Fréquence (cycles/min)","Amplitude (m/cycle)","Tempo (s/cycle)","Coups de bras (nb)","Respirations (nb)"];
   const rows=[],lap=[];let li=0;
   for(const x of r.rows){const L=x.wall?r.lens[li++]:null;
-    const B=r.blocks[x.to];rows.push([x.to+" m",fmtT(x.t),L?fmtT(L.lap):"",fmt(x.v),B?fmt(B.freq,1):"",B?fmt(B.amp):"",B?fmt(B.tempo):"",L?String(L.strokes):"",x.br?String(x.br):""]);lap.push(!!L)}
+    rows.push([x.to+" m",fmtT(x.t),L?fmtT(L.lap):"",fmt(x.v),x.freq?fmt(x.freq,1):"",x.freq&&x.amp!=null?fmt(x.amp):"",x.freq?fmt(x.tc):"",L?String(L.strokes):"",x.br?String(x.br):""]);lap.push(!!L)}
   return{head,rows,lap}}
 function turnTables(r){const f2=x=>x==null?"—":fmtT(x),d=x=>fmt(x);
   const dep=r.depart?[["Départ",f2(r.depart.react),f2(r.depart.vol),f2(r.depart.coulee),d(r.depart.couleeD),f2(r.depart.tDepart),f2(r.depart.t15)]]:[];
@@ -360,16 +365,16 @@ function render(){
 
 // graphique de course (comme les fiches Espadon PC) : vitesse et amplitude (axe gauche), fréquence et coups de bras (axe droit)
 function chartModel(r){const D=+$("f_dist").value;
-  const sp=r.rows.map(x=>[x.to,x.v]),fr=[],am=[];Object.entries(r.blocks).forEach(([d,b])=>{fr.push([+d,b.freq]);if(b.amp!=null)am.push([+d,b.amp])});
+  const sp=r.rows.map(x=>[x.to,x.v]),fr=r.cycles.slice(),am=[];r.rows.forEach(x=>{if(x.freq&&x.amp!=null){am.push([x.from,x.amp],[x.to,x.amp])}});
   const cb=r.lens.filter(L=>L.strokes).map(L=>[L.to,L.strokes]);
   const lmax=Math.max(3,Math.ceil(Math.max(0,...sp.map(p=>p[1]),...am.map(p=>p[1]))+0.5)),rmax=Math.max(30,Math.ceil(Math.max(0,...fr.map(p=>p[1]),...cb.map(p=>p[1]))/10)*10+10);
-  return{D,lmax,rmax,series:[{name:"Vitesse par section (m/s)",c:"--c-start",rgb:[122,18,18],pts:sp,ax:"l"},{name:"Fréquence (c/min)",c:"--c-break",rgb:[46,140,60],pts:fr,ax:"r"},{name:"Coups de bras",c:"--water",rgb:[74,110,170],pts:cb,ax:"r"},{name:"Amplitude (m/c)",c:"--c-breath",rgb:[235,160,60],pts:am,ax:"l"}]}}
+  return{D,lmax,rmax,series:[{name:"Vitesse par section (m/s)",c:"--c-start",rgb:[122,18,18],pts:sp,ax:"l"},{name:"Fréquence cycle par cycle (c/min)",c:"--c-break",rgb:[46,140,60],pts:fr,ax:"r"},{name:"Coups de bras",c:"--water",rgb:[74,110,170],pts:cb,ax:"r"},{name:"Amplitude par section (m/c)",c:"--c-breath",rgb:[235,160,60],pts:am,ax:"l"}]}}
 function drawChart(){const svg=$("chart"),r=compute(),M=chartModel(r),W=Math.max(svg.clientWidth,320),H=230,pl=34,pr=34,pt=12,pb=44;
   if(!r.rows.length){svg.innerHTML=`<text x="${pl}" y="100">Graphique de course</text>`;return}
   const X=d=>pl+(W-pl-pr)*d/M.D,YL=v=>pt+(H-pt-pb)*(1-v/M.lmax),YR=v=>pt+(H-pt-pb)*(1-v/M.rmax);let s="";
   for(let k=0;k<=5;k++){const y=pt+(H-pt-pb)*k/5;s+=`<line x1="${pl}" x2="${W-pr}" y1="${y}" y2="${y}" stroke="${css("--line")}"/><text x="${pl-4}" y="${y+4}" text-anchor="end">${fmt(M.lmax*(1-k/5),1)}</text><text x="${W-pr+4}" y="${y+4}">${Math.round(M.rmax*(1-k/5))}</text>`}
   const step=M.D<=100?10:M.D<=400?50:100;for(let d=0;d<=M.D;d+=step)s+=`<text x="${X(d)}" y="${H-pb+14}" text-anchor="middle">${d}</text>`;
-  M.series.forEach(se=>{if(se.pts.length<1)return;const Y=se.ax=="l"?YL:YR;s+=`<polyline fill="none" stroke="${css(se.c)}" stroke-width="2" points="${se.pts.map(p=>X(p[0])+","+Y(p[1])).join(" ")}"/>`+se.pts.map(p=>`<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="2.5" fill="${css(se.c)}"><title>${p[0]} m : ${fmt(p[1],se.name.startsWith("Coups")?0:2)}</title></circle>`).join("")});
+  M.series.forEach(se=>{if(se.pts.length<1)return;const Y=se.ax=="l"?YL:YR;s+=`<polyline fill="none" stroke="${css(se.c)}" stroke-width="2" points="${se.pts.map(p=>X(p[0])+","+Y(p[1])).join(" ")}"/>`+(se.pts.length>40?[]:se.pts).map(p=>`<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="2.5" fill="${css(se.c)}"><title>${p[0]} m : ${fmt(p[1],se.name.startsWith("Coups")?0:2)}</title></circle>`).join("")});
   let lx=pl;M.series.forEach(se=>{s+=`<rect x="${lx}" y="${H-14}" width="12" height="3" fill="${css(se.c)}"/><text x="${lx+16}" y="${H-10}">${se.name}</text>`;lx+=16+se.name.length*6.2+14});
   svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("height",H);svg.innerHTML=s}
 
@@ -424,7 +429,7 @@ document.addEventListener("keydown",e=>{if(locked())return;
   else if(KEYMAP[k]&&!e.metaKey&&!e.ctrlKey){e.preventDefault();addMark(KEYMAP[k])}
 });
 $("f_off").addEventListener("input",render);$("f_style").addEventListener("change",()=>{const v=$("f_style").value;$("f_cyc").value=(v=="Nage libre"||v=="Dos")?"0.5":"1";$("f_cyc").disabled=v=="4 nages";$("f_plan").value=planFor(v,$("f_bassin").value);render()});$("f_sync").addEventListener("change",render);$("f_offr").addEventListener("input",()=>{if(parseT($("f_offr").value)&&$("f_sync").value=="0")$("f_sync").value="2";render()});
-["f_bassin","f_dist","f_cyc","f_fps","f_plan","f_plan1"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin"){fillDist();$("f_plan").value=planFor($("f_style").value,$("f_bassin").value);$("f_plan1").value=PLAN1[$("f_bassin").value]}render()}));
+["f_bassin","f_dist","f_cyc","f_fps","f_plan","f_plan1","f_35"].forEach(id=>$(id).addEventListener("change",()=>{if(id=="f_bassin"){fillDist();$("f_plan").value=planFor($("f_style").value,$("f_bassin").value);$("f_plan1").value=PLAN1[$("f_bassin").value]}render()}));
 window.addEventListener("resize",()=>drawChart());
 
 // save / load
@@ -438,8 +443,8 @@ function checkVideo(){const w=$("vidWarn");if(!w)return;const e=expectedVideo,v=
   if(e.size&&v.size&&e.size!==v.size)diffs.push(`taille ${fmt(v.size/1048576,1)} Mo au lieu de ${fmt(e.size/1048576,1)} Mo`);
   if(e.duration&&v.duration&&Math.abs(e.duration-v.duration)>0.2)diffs.push(`durée ${fmt(v.duration)} s au lieu de ${fmt(e.duration)} s`);
   w.hidden=!diffs.length;w.textContent=diffs.length?"Attention : cette vidéo ne semble pas être celle utilisée pour cette analyse ("+diffs.join(", ")+"). Si elle a été recoupée ou réexportée, les pointages seront décalés.":""}
-const meta=()=>({video:videoInfo||expectedVideo||null,nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,rang:$("f_rank").value,officiel:$("f_off").value,sync:$("f_sync").value,reactOff:$("f_offr").value,plan:$("f_plan").value,plan1:$("f_plan1").value,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
-function applyMeta(m){expectedVideo=m.video||null;checkVideo();$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_cyc").disabled=(m.nage=="4 nages");$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_offr").value=m.reactOff||"";$("f_plan").value=m.plan||PLAN[m.bassin||50];$("f_plan1").value=m.plan1||m.plan||PLAN1[m.bassin||50];$("f_cyc").value=m.cycle||1}
+const meta=()=>({video:videoInfo||expectedVideo||null,nageur:$("f_nageur").value,competition:$("f_compet").value,date:$("f_date").value,bassin:+$("f_bassin").value,distance:+$("f_dist").value,nage:$("f_style").value,tour:$("f_round").value,couloir:+$("f_lane").value,rang:$("f_rank").value,officiel:$("f_off").value,sync:$("f_sync").value,reactOff:$("f_offr").value,plan:$("f_plan").value,plan1:$("f_plan1").value,r35:$("f_35").checked,fps:+$("f_fps").value,cycle:+$("f_cyc").value});
+function applyMeta(m){expectedVideo=m.video||null;checkVideo();$("f_nageur").value=m.nageur||"";$("f_compet").value=m.competition||"";$("f_date").value=m.date||"";$("f_bassin").value=m.bassin||50;fillDist();$("f_dist").value=m.distance||100;$("f_style").value=m.nage||"Nage libre";$("f_cyc").disabled=(m.nage=="4 nages");$("f_round").value=m.tour||"Séries";$("f_lane").value=m.couloir??4;$("f_rank").value=m.rang||"";$("f_fps").value=m.fps||25;$("f_off").value=m.officiel||"";$("f_sync").value=m.sync||"0";$("f_offr").value=m.reactOff||"";$("f_plan").value=m.plan||PLAN[m.bassin||50];$("f_plan1").value=m.plan1||m.plan||PLAN1[m.bassin||50];$("f_35").checked=!!m.r35;$("f_cyc").value=m.cycle||1}
 function renderSaved(){const a=getSaved();$("saved").innerHTML=a.length?a.map((x,i)=>`<div class="it"><div><b>${x.meta.nageur||"Sans nom"}</b> · ${x.meta.distance} m ${x.meta.nage} · ${x.meta.tour} · <span class="note">${x.meta.competition} ${x.meta.date}</span></div><button data-load="${i}">Ouvrir</button><button class="x" data-rm="${i}" aria-label="Supprimer">×</button></div>`).join(""):`<p class="note">Rien pour l'instant. Les analyses restent dans ce navigateur. Utilise « Copier en JSON » pour les sauvegarder ailleurs.</p>`}
 $("saved").onclick=e=>{const a=getSaved();if(e.target.dataset.load!=null){const x=a[+e.target.dataset.load];applyMeta(x.meta);marks=x.marks;sample=false;$("sampleBadge").hidden=true;render()}
   if(e.target.dataset.rm!=null){if(e.target.dataset.confirm){a.splice(+e.target.dataset.rm,1);setSaved(a);renderSaved()}else{e.target.dataset.confirm=1;e.target.textContent="Confirmer ?";e.target.style.fontSize="12px"}}};
@@ -479,6 +484,42 @@ function buildXlsxRows(){const r=compute(),m=meta(),A=[];const put=(row,a,b)=>{w
 $("btnXlsx").onclick_old=()=>{try{const ws=XLSX.utils.aoa_to_sheet(buildXlsxRows()),wb=XLSX.utils.book_new();ws["!cols"]=[{wch:24},{wch:44}];XLSX.utils.book_append_sheet(wb,ws,"Données analyses");
   const m=meta();XLSX.writeFile(wb,`${(m.nageur||"analyse").replace(/\s+/g,"_")}_${m.distance}_${m.nage.replace(/\s+/g,"")}_${m.tour}.xlsx`)}catch(e){$("btnXlsx").textContent="Excel indisponible";console.error(e)}};
 // rapport PDF
+// graphique du PDF : un seul graphique, axes gradués et titrés, murs en pointillés
+function pdfCharts(doc,r,y){const INK=[14,42,59],MUT=[85,112,130],GRID=[214,226,231],D=+$("f_dist").value,pool=+$("f_bassin").value;
+  const f=(x,d)=>x.toFixed(d).replace(".",",");
+  doc.setTextColor(...INK);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("GRAPHIQUE DE COURSE",14,y);
+  if(!r.rows.length)return y+6;
+  const V=r.rows.map(x=>[x.to,x.v]),A=r.rows.filter(x=>x.freq&&x.amp!=null).map(x=>[(x.from+x.to)/2,x.amp]),F=r.cycles;
+  const nice=(lo,hi,n=5)=>{const span=Math.max(hi-lo,1e-6),raw=span/n,p=Math.pow(10,Math.floor(Math.log10(raw))),st=[1,2,2.5,5,10].map(k=>k*p).find(k=>k>=raw);return{lo:Math.floor(lo/st)*st,hi:Math.ceil(hi/st)*st,st}};
+  const lv=[...V,...A].map(p=>p[1]),L=nice(Math.max(0,Math.min(...lv)-0.2),Math.max(...lv)+0.1),fv=F.map(p=>p[1]),R=fv.length?nice(Math.min(...fv)-3,Math.max(...fv)+3):{lo:0,hi:60,st:10};
+  const nL=Math.round((L.hi-L.lo)/L.st),nR=Math.round((R.hi-R.lo)/R.st);
+  const cx=28,cw=210-28-26,top=y+8,ch=62,X=d=>cx+cw*d/D,YL=v=>top+ch*(1-(v-L.lo)/(L.hi-L.lo)),YR=v=>top+ch*(1-(v-R.lo)/(R.hi-R.lo));
+  doc.setLineWidth(.15);doc.setFont("courier","normal");doc.setFontSize(7);
+  for(let k=0;k<=nL;k++){const v=L.lo+k*L.st,yy=YL(v);doc.setDrawColor(...GRID);doc.line(cx,yy,cx+cw,yy);doc.setTextColor(...MUT);doc.text(f(v,L.st<0.1?2:1),cx-1.5,yy+1,{align:"right"})}
+  for(let k=0;k<=nR;k++){const v=R.lo+k*R.st;doc.setTextColor(46,140,60);doc.text(String(Math.round(v)),cx+cw+1.5,YR(v)+1)}
+  doc.setDrawColor(150,170,180);for(let w=pool;w<D;w+=pool){doc.setLineDashPattern([.8,.8],0);doc.line(X(w),top,X(w),top+ch);doc.setLineDashPattern([],0)}
+  doc.setDrawColor(...MUT);doc.setLineWidth(.25);doc.rect(cx,top,cw,ch);
+  const xstep=D<=50?5:D<=100?10:D<=200?25:D<=400?50:100;doc.setTextColor(...MUT);
+  for(let d=0;d<=D;d+=xstep){doc.line(X(d),top+ch,X(d),top+ch+1);doc.text(String(d),X(d),top+ch+4,{align:"center"})}
+  // titres d'axes
+  doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(...MUT);
+  doc.text("Distance (m)",cx+cw/2,top+ch+9,{align:"center"});
+  const t1="Vitesse (m/s)  /  Amplitude (m/cycle)",t2="Fréquence (cycles/min)";
+  doc.text(t1,cx-10,top+ch/2+doc.getTextWidth(t1)/2,{angle:90});
+  doc.setTextColor(46,140,60);doc.text(t2,cx+cw+9,top+ch/2-doc.getTextWidth(t2)/2,{angle:-90});
+  // courbes
+  const draw=(pts,Y,rgb,dots,w=.6)=>{if(!pts.length)return;doc.setDrawColor(...rgb);doc.setFillColor(...rgb);doc.setLineWidth(w);
+    for(let k=1;k<pts.length;k++)doc.line(X(pts[k-1][0]),Y(pts[k-1][1]),X(pts[k][0]),Y(pts[k][1]));if(dots)pts.forEach(p=>doc.circle(X(p[0]),Y(p[1]),.7,"F"))};
+  const RED=[176,40,40],GRN=[46,140,60],ORG=[214,130,30];
+  draw(F,YR,GRN,false,.5);draw(A,YL,ORG,true);draw(V,YL,RED,true);
+  // coups de bras par longueur, en haut de chaque longueur
+  doc.setFont("helvetica","bold");doc.setFontSize(6.5);doc.setTextColor(...INK);
+  r.lens.forEach(Lg=>{if(Lg.strokes)doc.text(Lg.strokes+" CB",(X(Lg.from)+X(Lg.to))/2,top+3.5,{align:"center"})});
+  // légende
+  let lx=cx,ly=top+ch+14;doc.setFont("helvetica","normal");doc.setFontSize(7.5);
+  [["Vitesse par section (m/s)",RED],["Amplitude par section (m/cycle)",ORG],["Fréquence cycle par cycle (cycles/min, axe de droite)",GRN]].forEach(([t,c])=>{doc.setFillColor(...c);doc.rect(lx,ly-1.8,5,1.4,"F");doc.setTextColor(...MUT);doc.text(t,lx+6.5,ly-.6);lx+=10+doc.getTextWidth(t)});
+  doc.text("Pointillés : murs (virages)   |   CB : coups de bras de la longueur",cx,ly+4.5);
+  return ly+10}
 function buildPdf(){
   const {jsPDF}=window.jspdf, doc=new jsPDF({unit:"mm",format:"a4"}), r=compute(), m=meta();
   const INK=[14,42,59],RED=[214,69,61],BLUE=[31,111,149],GREEN=[46,156,106],MUT=[85,112,130],W=210;
@@ -504,14 +545,7 @@ function buildPdf(){
     doc.setTextColor(...INK);doc.setFont("courier","bold");doc.setFontSize(13);doc.text(b,x+4,73);
     doc.setFont("helvetica","normal");doc.setFontSize(7.5);doc.setTextColor(...MUT);doc.text(a.toUpperCase(),x+4,79)});
   // graphique vitesse
-  let y=92;doc.setTextColor(...INK);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text("GRAPHIQUE DE COURSE",14,y);
-  if(r.rows.length){const M=chartModel(r),cx=22,cw=W-14-cx-8,cy=y+4,ch=55;
-    const X=d=>cx+cw*d/M.D,YL=v=>cy+ch*(1-v/M.lmax),YR=v=>cy+ch*(1-v/M.rmax);doc.setFont("courier","normal");doc.setFontSize(6.5);doc.setLineWidth(.2);
-    for(let k=0;k<=5;k++){const yy=cy+ch*k/5;doc.setDrawColor(207,221,227);doc.line(cx,yy,cx+cw,yy);doc.setTextColor(...MUT);doc.text(f(M.lmax*(1-k/5),1),cx-1.5,yy+1,{align:"right"});doc.text(String(Math.round(M.rmax*(1-k/5))),cx+cw+1.5,yy+1)}
-    const step=M.D<=100?10:M.D<=400?50:100;for(let d=0;d<=M.D;d+=step)doc.text(String(d),X(d),cy+ch+4,{align:"center"});
-    doc.setLineWidth(.6);M.series.forEach(se=>{const Y=se.ax=="l"?YL:YR;doc.setDrawColor(...se.rgb);for(let k=1;k<se.pts.length;k++)doc.line(X(se.pts[k-1][0]),Y(se.pts[k-1][1]),X(se.pts[k][0]),Y(se.pts[k][1]))});
-    doc.setLineWidth(.2);doc.setFont("helvetica","normal");doc.setFontSize(7);let lx=cx;M.series.forEach(se=>{doc.setFillColor(...se.rgb);doc.rect(lx,cy+ch+7,5,1.2,"F");doc.setTextColor(...MUT);doc.text(se.name,lx+6.5,cy+ch+8.2);lx+=8+doc.getTextWidth(se.name)+5});
-    y=cy+ch+14}
+  let y=92;y=pdfCharts(doc,r,y);
   // tableaux
   const head={fillColor:INK,textColor:255,fontStyle:"bold",fontSize:7.5,halign:"right"};
   const st={font:"helvetica",fontSize:8,cellPadding:1.3,halign:"right",textColor:INK,lineColor:[207,221,227],lineWidth:{bottom:.2}};
@@ -665,7 +699,16 @@ function xlsxFromFiches(list){const A=[],nc=list.length;
   block("Tps approches","approche",tx);block("Distances murs","dMur",nx);block("Temps coulées","coulee",tx);block("Distances coulées","couleeD",nx);block("Temps total","total",tx);
   const ws=XLSX.utils.aoa_to_sheet(A),wb=XLSX.utils.book_new();ws["!cols"]=[{wch:24},...list.map(()=>({wch:44}))];XLSX.utils.book_append_sheet(wb,ws,"Données analyses");return wb}
 const fileBase=m=>`${(m.nageur||"analyse").replace(/\s+/g,"_")}_${m.distance}_${String(m.nage).replace(/\s+/g,"")}`;
-$("btnXlsx").onclick=()=>{try{const m=meta();XLSX.writeFile(xlsxFromFiches([{meta:m,fiche:ficheNow()}]),`${fileBase(m)}_${m.tour}.xlsx`)}catch(e){$("btnXlsx").textContent="Excel indisponible";console.error(e)}};
+// onglet lisible « Fiche » (comme le PDF), placé avant l'onglet au format Espadon PC
+function ficheSheet(){const r=compute(),m=meta(),mt=mainTable(r),tt=turnTables(r),A=[];
+  const num=v=>{const t=String(v).replace("—","").trim();if(!t)return"";if(/^\d+:\d/.test(t))return t;const n=+t.replace(",",".").replace(/ m$/,"");return isFinite(n)?n:t};
+  A.push(["Fiche d'analyse - Espadon Web"],[],["Nageur",m.nageur,"","Compétition",m.competition],["Épreuve",`${m.distance} m ${m.nage} (bassin ${m.bassin} m)`,"","Date",m.date],["Tour",m.tour,"","Couloir",m.couloir],
+    ["Temps",r.off!=null?fmtT(r.off):fmtT(r.final),"","Rang",m.rang||""],[]);
+  A.push(mt.head);mt.rows.forEach(x=>A.push([x[0],...x.slice(1).map(num)]));A.push([]);
+  if(tt.dep.length){A.push(["Départ",...tt.depHead.slice(1)]);tt.dep.forEach(x=>A.push([x[0],...x.slice(1).map(num)]));A.push([]);
+    A.push(["Virages",...tt.trHead.slice(1)]);tt.tr.forEach(x=>A.push([x[0],...x.slice(1).map(num)]))}
+  const ws=XLSX.utils.aoa_to_sheet(A);ws["!cols"]=[{wch:14},...Array(8).fill({wch:17})];return ws}
+$("btnXlsx").onclick=()=>{try{const m=meta();const wb=xlsxFromFiches([{meta:m,fiche:ficheNow()}]);XLSX.utils.book_append_sheet(wb,ficheSheet(),"Fiche");wb.SheetNames=["Fiche","Données analyses"];XLSX.writeFile(wb,`${fileBase(m)}_${m.tour}.xlsx`)}catch(e){$("btnXlsx").textContent="Excel indisponible";console.error(e)}};
 
 // ---- lecture d'un Excel Espadon PC (« Données analyses », une colonne par course) ----
 function parsePcTime(v){if(v==null)return null;if(typeof v=="number")return v;const s=String(v).trim();if(!s||s.startsWith("--"))return null;
